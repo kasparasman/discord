@@ -1,6 +1,6 @@
 import { InteractionType, InteractionResponseType, verifyKey } from 'discord-interactions';
 
-export const runtime = 'edge'; // High-level: Use Edge for speed
+//export const runtime = 'edge'; // High-level: Use Edge for speed
 
 export async function POST(req: Request) {
     const signature = req.headers.get('x-signature-ed25519');
