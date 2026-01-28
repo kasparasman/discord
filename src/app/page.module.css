@@ -1,0 +1,24 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+}
+
+.main {
+    text-align: center;
+}
+
+.ctas {
+    margin-top: 2rem;
+}
+
+.primary {
+    background: #0070f3;
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 5px;
+    text-decoration: none;
+}

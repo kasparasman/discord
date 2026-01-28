@@ -2,7 +2,17 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Events } = require('discord.js');
 const { neon } = require('@neondatabase/serverless');
 
+if (!process.env.DATABASE_URL) {
+    console.error("❌ Error: DATABASE_URL is not defined in the environment.");
+    process.exit(1);
+}
+
 const sql = neon(process.env.DATABASE_URL);
+
+if (!process.env.DISCORD_TOKEN) {
+    console.error("❌ Error: DISCORD_TOKEN is not defined in the environment.");
+    process.exit(1);
+}
 
 const client = new Client({
     intents: [
@@ -12,7 +22,7 @@ const client = new Client({
 });
 
 // Configure the roles that trigger a "Publisher" sync
-const PUBLISHER_ROLE_NAME = 'publisher'; // Change this if your role name is different
+const PUBLISHER_ROLE_NAME = 'Publisher'; // Change this if your role name is different
 
 client.once(Events.ClientReady, (readyClient) => {
     console.log(`✅ Logged in as ${readyClient.user.tag}`);
