@@ -1,0 +1,637 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  imageUrl    String
+  title       String
+  description String
+  link        String
+  investment  String
+  act         String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// USER PROFILE
+/// ─────────────────────────────────────────────────────────────────────────────
+model Profile {
+  id                   String                @id @unique
+  email                String                @unique
+  nickname             String?               @unique
+  warnings             Int                   @default(0)
+  banned               Boolean               @default(false)
+  avatarUrl            String?
+  createdAt            DateTime              @default(now()) @db.Timestamptz(6)
+  banReason            String?
+  bannedAt             DateTime?
+  lastModifiedAt       DateTime              @updatedAt
+  status               String                @default("PENDING")
+  deletedAt            DateTime?
+  deletionReason       String?
+  joinSequence         Int?                  @unique
+  gender               String?
+  styleUrl             String?
+  styleId              String?
+  error                String?
+  isRegistered         Boolean               @default(false)
+  billingAccount       BillingAccount?       @relation("ProfileBilling")
+  biometricEnrollment  BiometricEnrollment?  @relation("ProfileBiometric")
+  regSessions          RegistrationSession[]
+  actOnrampOrders      ActOnrampOrder[]      @relation("ProfileActOnrampOrders")
+  actTransactions      ActTransaction[]      @relation("ProfileActTransactions")
+  actWallet            ActWallet?            @relation("ProfileActWallet")
+  comments             Comment[]
+  growmakerProgress    UserModuleProgress[]  @relation("ProfileToGrowmakerProgress")
+  growmakerSubmissions GrowmakerSubmission[] @relation("ProfileToGrowmakerSubmission")
+  modLogs              ModLog[]
+  topicLikes           TopicLike[]
+
+  @@index([email])
+  @@index([id])
+  @@index([nickname])
+  @@index([status])
+  @@index([joinSequence])
+  @@map("profiles")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// Billing table
+/// ─────────────────────────────────────────────────────────────────────────────
+model BillingAccount {
+  id                String             @id @default(cuid())
+  profileId         String             @unique
+  stripeCustomerId  String             @unique
+  subscriptionId    String?            @unique
+  priceId           String?
+  amount            Int?
+  currency          String?
+  interval          String?
+  status            BillingStatus      @default(ACTIVE)
+  currentPeriodEnd  DateTime?
+  taxId             String?
+  activatedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  subStatus         SubscriptionStatus @default(none)
+  cancelAtPeriodEnd Boolean            @default(false)
+  canceledAt        DateTime?
+  endsAt            DateTime?
+  entitled          Boolean            @default(false)
+  profile           Profile            @relation("ProfileBilling", fields: [profileId], references: [id])
+  invoices          Invoice[]
+
+  @@index([endsAt])
+  @@index([profileId])
+  @@index([stripeCustomerId])
+  @@index([cancelAtPeriodEnd, currentPeriodEnd])
+  @@index([subStatus])
+}
+
+model Invoice {
+  id              String         @id @default(cuid())
+  billingId       String
+  stripeInvoiceId String         @unique
+  paymentIntentId String?
+  chargeId        String?
+  amountTotal     Int
+  currency        String
+  status          String
+  createdAt       DateTime       @default(now())
+  billing         BillingAccount @relation(fields: [billingId], references: [id])
+}
+
+model BiometricEnrollment {
+  id                 String    @id @default(cuid())
+  profileId          String    @unique
+  region             String
+  rekFaceId          String?   @unique
+  livenessLastPassAt DateTime?
+  enrollmentVersion  Int       @default(1)
+  consent            Boolean   @default(false)
+  consentVersion     Int?
+  consentAt          DateTime?
+  imageKeyPrimary    String?
+  imageKeyBackup     String?
+  retentionUntil     DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  profile            Profile   @relation("ProfileBiometric", fields: [profileId], references: [id])
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// Security
+/// ─────────────────────────────────────────────────────────────────────────────
+model Session {
+  id         String   @id @default(cuid())
+  profileId  String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @updatedAt
+  ip         String?
+  userAgent  String?
+  valid      Boolean  @default(true)
+
+  @@index([profileId])
+}
+
+model WebAuthnCredential {
+  id        String   @id
+  profileId String
+  publicKey Bytes
+  signCount Int
+  createdAt DateTime @default(now())
+
+  @@index([profileId])
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// CITY ASSETS (SECTORS + COMPANIES)
+/// ─────────────────────────────────────────────────────────────────────────────
+model Sector {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String    @unique
+  colorHex  String
+  order     Int       @default(0)
+  companies Company[]
+
+  @@index([order])
+  @@map("sectors")
+}
+
+model Company {
+  id               Int      @id @default(autoincrement())
+  name             String
+  slug             String   @unique
+  description      String?
+  logoUrl          String
+  websiteUrl       String?
+  category         String?
+  sectorId         Int
+  totalInvestment  Float    @default(0)
+  tokenCount       Float    @default(0)
+  discountMin      Int?
+  discountMax      Int?
+  isActive         Boolean  @default(true)
+  order            Int      @default(0)
+  logoClassDesktop String?
+  logoClassMobile  String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt
+  sector           Sector   @relation(fields: [sectorId], references: [id])
+
+  @@index([sectorId])
+  @@index([isActive])
+  @@index([order])
+  @@map("companies")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// TOPICS
+/// ─────────────────────────────────────────────────────────────────────────────
+model Topic {
+  id         String      @id
+  title      String
+  body       String
+  createdAt  DateTime    @default(now()) @db.Timestamptz(6)
+  videoUrl   String
+  imageUrl   String?
+  comments   Comment[]
+  topicLikes TopicLike[]
+
+  @@map("topics")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// COMMENTS  (threaded via parentId ⇄ replies)
+/// ─────────────────────────────────────────────────────────────────────────────
+model Comment {
+  id        String    @id
+  body      String
+  authorId  String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  parentId  String?
+  topicId   String
+  author    Profile?  @relation(fields: [authorId], references: [id])
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  topic     Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  modLogs   ModLog[]
+
+  @@index([topicId, createdAt(sort: Desc)])
+  @@map("comments")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// TOPIC LIKES  (composite-PK: one like per user per topic)
+/// ─────────────────────────────────────────────────────────────────────────────
+model TopicLike {
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  topicId   String
+  userId    String?
+  id        String   @id @default(uuid())
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user      Profile? @relation(fields: [userId], references: [id])
+
+  @@unique([userId, topicId])
+  @@index([topicId])
+  @@map("topic_likes")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// MODERATION LOGS  (every warning / ban event)
+/// ─────────────────────────────────────────────────────────────────────────────
+model ModLog {
+  id        Int      @id @default(autoincrement())
+  score     String
+  commentId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  userId    String?
+  action    Int      @default(0)
+  comment   Comment? @relation(fields: [commentId], references: [id])
+  user      Profile? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("mod_logs")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// GLOBAL COUNTERS (single-row per counter name)
+/// ─────────────────────────────────────────────────────────────────────────────
+model Counter {
+  name  String @id
+  value Int
+
+  @@map("counters")
+}
+
+/// Dedicated visitor counter (kept separate from other counters)
+/// Each row represents a named visitor counter; for now we use name = 'visitors'.
+model VisitorCounter {
+  name  String @id
+  value Int
+
+  @@map("visitor_counters")
+}
+
+model NewsTimer {
+  id    String @id
+  value String
+
+  @@map("news_timer")
+}
+
+/// ─────────────────────────────────────────────────
+/// EXPIRED PROFILES  (cold archive)
+/// ─────────────────────────────────────────────────
+model ExpiredProfile {
+  id                     String    @id
+  email                  String
+  nickname               String?
+  citizenId              Int?
+  warnings               Int       @default(0)
+  banned                 Boolean   @default(false)
+  avatarUrl              String?
+  status                 String    @default("PENDING")
+  rekFaceId              String?
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?
+  stripeInvoiceId        String?
+  stripePaymentIntentId  String?
+  stripeChargeId         String?
+  stripeRefundId         String?
+  stripePriceId          String?
+  stripeCurrentPeriodEnd DateTime?
+  styleId                String?
+  styleUrl               String?
+  gender                 String?
+  biometricConsent       Boolean   @default(false)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(6)
+  lastModifiedAt         DateTime
+  banReason              String?
+  bannedAt               DateTime?
+  deletedAt              DateTime?
+  deletionReason         String?
+  regRetryCount          Int       @default(0)
+  regMeta                Json?
+  expiredAt              DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([expiredAt])
+  @@map("expired_profiles")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// INFLUENCER APPLICATIONS
+/// ─────────────────────────────────────────────────────────────────────────────
+model InfluencerApplication {
+  id              String            @id @default(cuid())
+  socialMediaLink String
+  email           String?
+  name            String?
+  status          ApplicationStatus @default(PENDING)
+  notes           String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(6)
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+  @@map("influencer_applications")
+}
+
+model RegistrationSession {
+  id             String                    @id @default(cuid())
+  lastLivenessId String?
+  confidence     Float?
+  ageLow         Int?
+  ageHigh        Int?
+  email          String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  userId         String?
+  attemptCount   Int                       @default(0)
+  faceBucket     String?
+  faceKey        String?
+  isDuplicate    Boolean?
+  auditImages    Json                      @default("[]")
+  expiresAt      DateTime?
+  status         RegistrationSessionStatus
+  avatarId       String?
+  provider       String?
+  gender         String?
+  profile        Profile?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+}
+
+model GrowmakerSubmission {
+  id             String   @id @default(cuid())
+  userId         String?
+  visitorId      String?
+  moduleId       String
+  answers        Json
+  analysis       String
+  recommendedIds String[]
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  user           Profile? @relation("ProfileToGrowmakerSubmission", fields: [userId], references: [id])
+
+  @@index([userId, moduleId, createdAt])
+  @@index([visitorId, moduleId, createdAt])
+  @@map("growmaker_submissions")
+}
+
+model UserModuleProgress {
+  id               String    @id @default(cuid())
+  userId           String?
+  visitorId        String?
+  moduleId         String
+  status           String
+  completedAt      DateTime?
+  lastSubmissionId String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt
+  user             Profile?  @relation("ProfileToGrowmakerProgress", fields: [userId], references: [id])
+
+  @@unique([userId, moduleId])
+  @@unique([visitorId, moduleId])
+  @@index([status, updatedAt])
+  @@index([userId, moduleId, updatedAt])
+  @@index([visitorId, moduleId, updatedAt])
+  @@map("growmaker_progress")
+}
+
+model StripeEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
+  txId       String?
+  processed  Boolean  @default(false)
+
+  @@index([processed])
+  @@map("stripe_events")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// ACT TOKEN DOMAIN
+/// ─────────────────────────────────────────────────────────────────────────────
+model ActWallet {
+  id         String   @id @default(cuid())
+  profileId  String   @unique
+  balanceAct Decimal  @default(0) @db.Decimal(36, 18)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  profile    Profile  @relation("ProfileActWallet", fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("act_wallets")
+}
+
+model ActTransaction {
+  id              String               @id @default(cuid())
+  profileId       String
+  type            ActTransactionType
+  amountAct       Decimal              @db.Decimal(36, 18)
+  amountFiat      Decimal?             @db.Decimal(18, 2)
+  fiatCurrency    String?              @db.VarChar(8)
+  providerOrderId String?
+  providerTxId    String?
+  status          ActTransactionStatus @default(PENDING)
+  rawPayload      Json?
+  createdAt       DateTime             @default(now())
+  profile         Profile              @relation("ProfileActTransactions", fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("act_transactions")
+}
+
+model ActOnrampOrder {
+  id              String               @id @default(cuid())
+  profileId       String
+  providerOrderId String?
+  status          ActOnrampOrderStatus @default(INITIALIZED)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  profile         Profile              @relation("ProfileActOnrampOrders", fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt(sort: Desc)])
+  @@map("act_onramp_orders")
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// GROWMAKER MODULES (Content Management)
+/// ─────────────────────────────────────────────────────────────────────────────
+model Module {
+  id          String          @id
+  slug        String          @unique
+  name        String
+  description String
+  color       String
+  iconName    String
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  type        ModuleType      @default(PROGRAM)
+  sections    ModuleSection[]
+
+  @@index([slug])
+  @@index([order])
+  @@map("modules")
+}
+
+model ModuleSection {
+  id              String   @id @default(cuid())
+  moduleId        String
+  sectionId       String
+  kind            String
+  title           String
+  order           Int      @default(0)
+  video           Json
+  props           Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  fullDescription String?
+  module          Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, sectionId])
+  @@index([moduleId, order])
+  @@map("module_sections")
+}
+
+model Order {
+  id              Int          @id @default(autoincrement())
+  rawInput        String       @map("raw_input")
+  briefContent    String?      @map("brief_content")
+  productLink     String?      @map("product_link")
+  rewardAmount    Int?         @map("reward_amount")
+  status          String       @default("OPEN") @db.VarChar(20)
+  discordThreadId String?      @map("discord_thread_id")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  submissions     Submission[]
+
+  @@map("orders")
+}
+
+model Publisher {
+  id              Int          @id @default(autoincrement())
+  discordId       String       @unique @map("discord_id")
+  username        String?
+  walletAddress   String?      @map("wallet_address")
+  reputationScore Int          @default(0) @map("reputation_score")
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  submissions     Submission[]
+
+  @@map("publishers")
+}
+
+model Submission {
+  id              Int       @id @default(autoincrement())
+  orderId         Int       @map("order_id")
+  userId          Int?      @map("user_id")
+  videoLink       String    @map("video_link")
+  platformVideoId String?   @map("platform_video_id")
+  status          String    @default("PENDING_REVIEW") @db.VarChar(20)
+  initialViews    Int       @default(0) @map("initial_views")
+  final24hViews   Int       @default(0) @map("final_24h_views")
+  likes           Int       @default(0)
+  shares          Int       @default(0)
+  submittedAt     DateTime  @default(now()) @map("submitted_at")
+  order           Order     @relation(fields: [orderId], references: [id])
+  publisher       Publisher? @relation(fields: [userId], references: [id])
+
+  @@map("submissions")
+}
+
+model products {
+  product_id      String    @id @db.VarChar(50)
+  product_name    String?
+  description     String?
+  final_image_url String?
+  bg_color        String?   @db.VarChar(50)
+  chosen_option   String?   @db.VarChar(1)
+  status          String?   @db.VarChar(50)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+}
+
+enum RegistrationSessionStatus {
+  START
+  PASS_LIVENESS
+  AVATAR_SELECTED
+  ACCOUNT_CREATED
+  EMAIL_SENT
+  CREDENTIALS_ATTACHED
+  PAYMENT_INITIATED
+  PAYMENT_FAILED
+  PAYMENT_SUCCEEDED
+  PROVISIONING
+  PROVISIONING_AVATAR_DONE
+  PROVISIONING_FACE_INDEXED
+  PROVISIONING_NICKNAME_DONE
+  ACTIVE
+  EXPIRED
+  FAILED_LIVENESS
+  ROLLBACK
+  FAILED_PROVISION
+}
+
+enum BillingStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  none
+  incomplete
+  incomplete_expired
+  trialing
+  active
+  past_due
+  unpaid
+  canceled
+}
+
+enum ActTransactionType {
+  BUY
+  SELL
+}
+
+enum ActTransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum ActOnrampOrderStatus {
+  INITIALIZED
+  REJECTED
+  REQUIRES_PAYMENT
+  FULFILLMENT_PROCESSING
+  FULFILLMENT_COMPLETE
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVIEWED
+}
+
+enum ModuleType {
+  PROGRAM
+  TEST
+}

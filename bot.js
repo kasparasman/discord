@@ -17,7 +17,8 @@ if (!process.env.DISCORD_TOKEN) {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages
     ]
 });
 
@@ -26,9 +27,10 @@ const PUBLISHER_ROLE_NAME = 'Publisher'; // Change this if your role name is dif
 
 client.once(Events.ClientReady, (readyClient) => {
     console.log(`✅ Logged in as ${readyClient.user.tag}`);
-    console.log("Listening for role changes...");
+    console.log("Listening for role changes and interactions...");
 });
 
+// 1. Handle Role Changes (Sync to DB)
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     const oldRoles = oldMember.roles.cache;
     const newRoles = newMember.roles.cache;
@@ -57,7 +59,6 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
             console.log(`🚀 Syncing ${newMember.user.username} to DB (Is Publisher: ${isNowPublisher})`);
 
             try {
-                // Upsert logic into the 'publishers' table based on your Prisma schema
                 await sql`
                     INSERT INTO publishers (discord_id, username, is_active)
                     VALUES (${newMember.id}, ${newMember.user.username}, ${isNowPublisher})
@@ -70,6 +71,55 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
             } catch (error) {
                 console.error(`❌ DB Sync Error:`, error);
             }
+        }
+    }
+});
+
+// 2. Handle Button Interactions (Order Accept/Deny)
+client.on(Events.InteractionCreate, async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    // customId format: accept_order_123 or deny_order_123
+    const [action, type, orderId] = interaction.customId.split('_');
+
+    if (type === 'order') {
+        const member = interaction.member;
+        const isPublisher = member.roles.cache.some(role => role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase());
+
+        if (!isPublisher) {
+            return interaction.reply({
+                content: `❌ Only users with the **${PUBLISHER_ROLE_NAME}** role can accept missions.`,
+                ephemeral: true
+            });
+        }
+
+        if (action === 'accept') {
+            try {
+                console.log(`📝 Processsing acceptance for Order #${orderId} by ${interaction.user.username}`);
+
+                // Update Database Status to "ACCEPTED"
+                await sql`
+                    UPDATE orders 
+                    SET status = 'ACCEPTED' 
+                    WHERE id = ${parseInt(orderId)};
+                `;
+
+                // Respond to Discord
+                await interaction.reply({
+                    content: `✅ Mission #${orderId} accepted by ${interaction.user.username}!`,
+                    ephemeral: false
+                });
+
+                // Disable the buttons so no one else can click them
+                await interaction.message.edit({ components: [] });
+            } catch (error) {
+                console.error('❌ Failed to update order in DB:', error);
+                await interaction.reply({ content: '❌ Error processing acceptance. Please try again.', ephemeral: true });
+            }
+        }
+
+        if (action === 'deny') {
+            await interaction.reply({ content: '❌ Mission denied.', ephemeral: true });
         }
     }
 });
