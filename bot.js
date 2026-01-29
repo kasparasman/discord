@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, Events, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { neon } = require('@neondatabase/serverless');
 
 if (!process.env.DATABASE_URL) {
@@ -162,8 +162,110 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
     }
 
+    if (action === 'submit') {
+        try {
+            // 1. Check if user is enrolled
+            const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
+
+            if (!localPublisher) {
+                return interaction.reply({ content: "❌ You must accept the mission first.", flags: [MessageFlags.Ephemeral] });
+            }
+
+            const [enrolled] = await sql`
+                SELECT id FROM order_participants 
+                WHERE order_id = ${parseInt(orderId)} AND publisher_id = ${localPublisher.id} LIMIT 1;
+            `;
+
+            if (!enrolled) {
+                return interaction.reply({ content: "❌ You are not enrolled in this mission. Click **Accept Mission** first.", flags: [MessageFlags.Ephemeral] });
+            }
+
+            // 2. Check Submission Deadline (48h)
+            const [order] = await sql`SELECT created_at FROM orders WHERE id = ${parseInt(orderId)} LIMIT 1;`;
+            const createdAt = new Date(order.created_at);
+            const now = new Date();
+            const hoursSinceCreation = (now - createdAt) / (1000 * 60 * 60);
+
+            if (hoursSinceCreation > 48) {
+                return interaction.reply({ content: "❌ **Submission Closed.** The 48-hour deadline has passed.", flags: [MessageFlags.Ephemeral] });
+            }
+
+            // 3. Check for Duplicate Submission
+            const [submitted] = await sql`
+                SELECT id FROM submissions 
+                WHERE order_id = ${parseInt(orderId)} AND user_id = ${localPublisher.id} LIMIT 1;
+            `;
+
+            if (submitted) {
+                return interaction.reply({ content: "👋 You have already submitted for this order.", flags: [MessageFlags.Ephemeral] });
+            }
+
+            // 4. Show Modal
+            const modal = new ModalBuilder()
+                .setCustomId(`modal_submit_${orderId}`)
+                .setTitle(`Submit Video for Order #${orderId}`);
+
+            const videoLinkInput = new TextInputBuilder()
+                .setCustomId('video_url')
+                .setLabel("Video Link (Drive/Dropbox/YouTube)")
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder("https://...")
+                .setRequired(true);
+
+            const reflectionInput = new TextInputBuilder()
+                .setCustomId('reflection')
+                .setLabel("Self-Reflection")
+                .setStyle(TextInputStyle.Paragraph)
+                .setPlaceholder("What did you learn or focus on in this edit?")
+                .setRequired(true);
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(videoLinkInput),
+                new ActionRowBuilder().addComponents(reflectionInput)
+            );
+
+            await interaction.showModal(modal);
+
+        } catch (error) {
+            console.error('❌ Failed to trigger submission modal:', error);
+            await interaction.reply({ content: '❌ Error opening submission form.', flags: [MessageFlags.Ephemeral] });
+        }
+    }
+
     if (action === 'deny') {
         await interaction.reply({ content: '❌ Mission denied. Feel free to ignore.', flags: [MessageFlags.Ephemeral] });
+    }
+});
+
+// 3. Handle Modal Submissions
+client.on(Events.InteractionCreate, async (interaction) => {
+    if (!interaction.isModalSubmit()) return;
+
+    if (interaction.customId.startsWith('modal_submit_')) {
+        const orderId = interaction.customId.replace('modal_submit_', '');
+        const videoUrl = interaction.fields.getTextInputValue('video_url');
+        const reflection = interaction.fields.getTextInputValue('reflection');
+
+        try {
+            console.log(`📥 Processing submission for Order #${orderId} by ${interaction.user.username}`);
+
+            const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
+
+            // Insert into DB
+            await sql`
+                INSERT INTO submissions (order_id, user_id, video_link, reflection, status)
+                VALUES (${parseInt(orderId)}, ${localPublisher.id}, ${videoUrl}, ${reflection}, 'PENDING_REVIEW');
+            `;
+
+            // Post success to the thread
+            await interaction.reply({
+                content: `✅ **Submission Received!**\n\n**Contributor:** <@${interaction.user.id}>\n**Video URL:** ${videoUrl}\n**Reflection:** ${reflection}\n\n*Our team will review your edit. Good luck!*`
+            });
+
+        } catch (error) {
+            console.error('❌ Failed to save submission:', error);
+            await interaction.reply({ content: '❌ Error saving your submission. Please try again.', flags: [MessageFlags.Ephemeral] });
+        }
     }
 });
 

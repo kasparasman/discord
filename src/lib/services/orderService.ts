@@ -37,8 +37,29 @@ export async function createOrderService(rawInput: string, productLink: string, 
 
     // 3. BROADCAST TO DISCORD (via BOT REST API)
     if (process.env.DISCORD_TOKEN && process.env.DISCORD_FORUM_CHANNEL_ID) {
-        logger.info('[Order Service] Broadcasting to Discord Forum');
+        logger.info('[Order Service] Broadcasting to Discord');
         try {
+            const WORKSHOP_CHANNEL_ID = "1466334267465531432";
+
+            // --- STEP A: Create Production Workshop Thread ---
+            logger.info('[Order Service] Creating Production Workshop thread');
+            const workshopRes = await fetch(`https://discord.com/api/v10/channels/${WORKSHOP_CHANNEL_ID}/threads`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
+                },
+                body: JSON.stringify({
+                    name: `🛠️ WORKSHOP | ORDER #${newOrder.id}`,
+                    message: {
+                        content: `🚀 **Production Workshop Started for Order #${newOrder.id}**\nThis is the dedicated space for contributors to collaborate, share drafts, and finalize assets.\n\n*Reference Briefing: [Pending...]*`
+                    }
+                }),
+            });
+            const workshopData = await workshopRes.json();
+            const workshopThreadId = workshopData.id;
+
+            // --- STEP B: Create Mission Briefing Thread (Main Forum) ---
             const components = [
                 {
                     type: 1, // Action Row
@@ -48,6 +69,12 @@ export async function createOrderService(rawInput: string, productLink: string, 
                             style: 3, // Success (Green)
                             label: "Accept Mission",
                             custom_id: `accept_order_${newOrder.id}`
+                        },
+                        {
+                            type: 2, // Button
+                            style: 1, // Primary (Blue)
+                            label: "Submit Video",
+                            custom_id: `submit_order_${newOrder.id}`
                         },
                         {
                             type: 2, // Button
@@ -90,6 +117,11 @@ export async function createOrderService(rawInput: string, productLink: string, 
                                         inline: true,
                                     },
                                     {
+                                        name: "🏗️ PRODUCTION ROOM",
+                                        value: workshopThreadId ? `<#${workshopThreadId}>` : "Created pending...",
+                                        inline: true,
+                                    },
+                                    {
                                         name: "📝 ENROLLMENT CLOSES",
                                         value: `<t:${enrollmentUnix}:R>`,
                                         inline: true,
@@ -114,12 +146,27 @@ export async function createOrderService(rawInput: string, productLink: string, 
             const responseData = await discordRes.json();
 
             if (discordRes.ok) {
-                logger.info({ threadId: responseData.id }, '[Order Service] Discord thread created with buttons');
+                logger.info({ threadId: responseData.id, workshopId: workshopThreadId }, '[Order Service] Both threads created');
+
+                // Update Workshop with link to Briefing
+                if (workshopThreadId && responseData.id) {
+                    await fetch(`https://discord.com/api/v10/channels/${workshopThreadId}/messages`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
+                        },
+                        body: JSON.stringify({
+                            content: `🔗 **Mission Briefing Link:** <#${responseData.id}>`
+                        })
+                    });
+                }
 
                 newOrder = await prisma.order.update({
                     where: { id: newOrder.id },
                     data: {
                         discordThreadId: responseData.id,
+                        workshopThreadId: workshopThreadId, // Store the workshop ID too
                         enrollmentExpiresAt: new Date(Date.now() + enrollmentTimeMs),
                         submissionExpiresAt: new Date(Date.now() + submissionTimeMs)
                     }
