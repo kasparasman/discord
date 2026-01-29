@@ -10,8 +10,8 @@ export async function POST(req: Request) {
         logger.info({ body }, '[Orders API] Request body parsed');
         const { rawInput, productLink, reward } = body;
 
-        if (!rawInput || !productLink || reward === undefined) {
-            logger.warn('[Orders API] Missing required fields in request body');
+        if (!rawInput || productLink === undefined || reward === undefined) {
+            logger.warn({ rawInput, productLink, reward }, '[Orders API] Validation failed: missing fields');
             return NextResponse.json({ error: "Missing required fields (rawInput, productLink, reward)" }, { status: 400 });
         }
 
