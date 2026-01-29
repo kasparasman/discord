@@ -94,11 +94,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (action === 'accept') {
         try {
-            // 1. Acknowledge immediately to prevent "Interaction Failed"
-            // We use deferUpdate() if we don't want to send a NEW message, 
-            // but since we want to confirm, we can just use reply() with ephemeral: true
-
             console.log(`📝 Processing pool entry for Order #${orderId} by ${interaction.user.username}`);
+
+            // 1. HARD GATE CHECK: Verify if enrollment period is over (24h)
+            const [order] = await sql`
+                SELECT created_at FROM orders WHERE id = ${parseInt(orderId)} LIMIT 1;
+            `;
+
+            if (!order) {
+                return interaction.reply({ content: "❌ Error: Order not found.", flags: [MessageFlags.Ephemeral] });
+            }
+
+            const createdAt = new Date(order.created_at);
+            const now = new Date();
+            const hoursSinceCreation = (now - createdAt) / (1000 * 60 * 60);
+
+            if (hoursSinceCreation > 24) {
+                return interaction.reply({
+                    content: "❌ **Intake Closed.** You missed the 24-hour enrollment window for this production cycle.",
+                    flags: [MessageFlags.Ephemeral]
+                });
+            }
 
             // 2. Ensure the Publisher exists (Upsert)
             const [localPublisher] = await sql`
@@ -132,7 +148,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             // 5. Simple confirmation
             await interaction.reply({
-                content: `✅ **Mission #${orderId} Accepted!** You've been added to the pool. Good luck! 🚀`,
+                content: `✅ **Enrolled!** You have been added to the participant pool. You have **24 hours** from now (48h total from post) to complete your submission. 🚀`,
                 flags: [MessageFlags.Ephemeral]
             });
 

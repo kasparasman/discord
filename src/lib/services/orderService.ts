@@ -53,6 +53,10 @@ export async function createOrderService(rawInput: string, productLink: string, 
                 }
             ];
 
+            const nowUnix = Math.floor(Date.now() / 1000);
+            const enrollmentUnix = nowUnix + (24 * 60 * 60); // 24 hours
+            const submissionUnix = nowUnix + (48 * 60 * 60); // 48 hours
+
             const discordRes = await fetch(`https://discord.com/api/v10/channels/${process.env.DISCORD_FORUM_CHANNEL_ID}/threads`, {
                 method: "POST",
                 headers: {
@@ -61,6 +65,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
                 },
                 body: JSON.stringify({
                     name: `ORDER #${newOrder.id} | ${rawInput.slice(0, 25).toUpperCase()}...`,
+                    applied_tags: ["1466317856399425557"], // [Open Order] Tag
                     message: {
                         embeds: [
                             {
@@ -74,18 +79,23 @@ export async function createOrderService(rawInput: string, productLink: string, 
                                         inline: true,
                                     },
                                     {
-                                        name: "⏳ DEADLINE",
-                                        value: "24 Hours",
-                                        inline: true,
-                                    },
-                                    {
                                         name: "📦 ASSETS",
                                         value: `[Download Here](${productLink})`,
                                         inline: true,
+                                    },
+                                    {
+                                        name: "📝 ENROLLMENT CLOSES",
+                                        value: `<t:${enrollmentUnix}:R>`,
+                                        inline: true,
+                                    },
+                                    {
+                                        name: "🎬 SUBMISSION DEADLINE",
+                                        value: `<t:${submissionUnix}:R>`,
+                                        inline: false,
                                     }
                                 ],
                                 footer: {
-                                    text: "Discuss strategies below. Post final link in #submissions.",
+                                    text: "Once enrollment closes, you cannot enter this production cycle.",
                                 },
                                 timestamp: new Date().toISOString(),
                             },
@@ -99,11 +109,54 @@ export async function createOrderService(rawInput: string, productLink: string, 
 
             if (discordRes.ok) {
                 logger.info({ threadId: responseData.id }, '[Order Service] Discord thread created with buttons');
-                // Optional: Store the thread ID in the DB
+
                 await prisma.order.update({
                     where: { id: newOrder.id },
-                    data: { discordThreadId: responseData.id }
+                    data: {
+                        discordThreadId: responseData.id,
+                        enrollmentExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                        submissionExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+                    }
                 });
+
+                // --- QSTASH SCHEDULING ---
+                if (process.env.QSTASH_TOKEN && process.env.APP_URL) {
+                    logger.info('[Order Service] Scheduling mission phases via QStash');
+                    const qstashUrl = `https://qstash.upstash.io/v2/publish/${process.env.APP_URL}/api/expire-enrollment`;
+
+                    // Phase 1: Close Enrollment (24h)
+                    await fetch(qstashUrl, {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${process.env.QSTASH_TOKEN}`,
+                            "Content-Type": "application/json",
+                            "Upstash-Delay": "24h"
+                        },
+                        body: JSON.stringify({
+                            orderId: newOrder.id,
+                            threadId: responseData.id,
+                            phase: 'ENROLLMENT_CLOSED'
+                        })
+                    });
+
+                    // Phase 2: Submission Deadline (48h)
+                    await fetch(qstashUrl, {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${process.env.QSTASH_TOKEN}`,
+                            "Content-Type": "application/json",
+                            "Upstash-Delay": "48h"
+                        },
+                        body: JSON.stringify({
+                            orderId: newOrder.id,
+                            threadId: responseData.id,
+                            phase: 'SUBMISSION_CLOSED'
+                        })
+                    });
+                } else {
+                    logger.warn('[Order Service] QSTASH_TOKEN or APP_URL missing. Auto-expiration not scheduled.');
+                }
+
             } else {
                 logger.error({ error: responseData }, '[Order Service] Discord API returned error');
             }

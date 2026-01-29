@@ -516,9 +516,11 @@ model Order {
   briefContent    String?            @map("brief_content")
   productLink     String?            @map("product_link")
   rewardAmount    Int?               @map("reward_amount")
-  status          String             @default("OPEN") @db.VarChar(20)
-  discordThreadId String?            @map("discord_thread_id")
-  createdAt       DateTime           @default(now()) @map("created_at")
+  status              String             @default("OPEN") @db.VarChar(20)
+  discordThreadId     String?            @map("discord_thread_id")
+  enrollmentExpiresAt DateTime?          @map("enrollment_expires_at")
+  submissionExpiresAt DateTime?          @map("submission_expires_at")
+  createdAt           DateTime       @default(now()) @map("created_at")
   submissions     Submission[]
   participants    OrderParticipant[]
 
