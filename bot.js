@@ -205,11 +205,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 .setCustomId(`modal_submit_${orderId}`)
                 .setTitle(`Submit Video for Order #${orderId}`);
 
-            const videoLinkInput = new TextInputBuilder()
-                .setCustomId('video_url')
-                .setLabel("Video Link (Drive/Dropbox/YouTube)")
+            const tiktokInput = new TextInputBuilder()
+                .setCustomId('tiktok_url')
+                .setLabel("TikTok URL")
                 .setStyle(TextInputStyle.Short)
-                .setPlaceholder("https://...")
+                .setPlaceholder("https://www.tiktok.com/@user/video/...")
+                .setRequired(true);
+
+            const instagramInput = new TextInputBuilder()
+                .setCustomId('instagram_url')
+                .setLabel("Instagram Reel URL")
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder("https://www.instagram.com/reels/...")
                 .setRequired(true);
 
             const reflectionInput = new TextInputBuilder()
@@ -220,7 +227,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 .setRequired(true);
 
             modal.addComponents(
-                new ActionRowBuilder().addComponents(videoLinkInput),
+                new ActionRowBuilder().addComponents(tiktokInput),
+                new ActionRowBuilder().addComponents(instagramInput),
                 new ActionRowBuilder().addComponents(reflectionInput)
             );
 
@@ -243,23 +251,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.customId.startsWith('modal_submit_')) {
         const orderId = interaction.customId.replace('modal_submit_', '');
-        const videoUrl = interaction.fields.getTextInputValue('video_url');
+        const tiktokUrl = interaction.fields.getTextInputValue('tiktok_url').trim();
+        const instagramUrl = interaction.fields.getTextInputValue('instagram_url').trim();
         const reflection = interaction.fields.getTextInputValue('reflection');
 
+        // Smart Validation
+        const isTikTok = (url) => url.includes('tiktok.com');
+        const isInstagram = (url) => url.includes('instagram.com');
+
+        if (!isTikTok(tiktokUrl)) {
+            return interaction.reply({ content: "❌ **Invalid TikTok URL.** Please provide a valid link from tiktok.com", flags: [MessageFlags.Ephemeral] });
+        }
+        if (!isInstagram(instagramUrl)) {
+            return interaction.reply({ content: "❌ **Invalid Instagram URL.** Please provide a valid leak from instagram.com", flags: [MessageFlags.Ephemeral] });
+        }
+
         try {
-            console.log(`📥 Processing submission for Order #${orderId} by ${interaction.user.username}`);
+            console.log(`📥 Processing dual-link submission for Order #${orderId} by ${interaction.user.username}`);
 
             const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
 
             // Insert into DB
             await sql`
-                INSERT INTO submissions (order_id, user_id, video_link, reflection, status)
-                VALUES (${parseInt(orderId)}, ${localPublisher.id}, ${videoUrl}, ${reflection}, 'PENDING_REVIEW');
+                INSERT INTO submissions (order_id, user_id, tiktok_link, instagram_link, reflection, status)
+                VALUES (${parseInt(orderId)}, ${localPublisher.id}, ${tiktokUrl}, ${instagramUrl}, ${reflection}, 'PENDING_REVIEW');
             `;
 
             // Post success to the thread
             await interaction.reply({
-                content: `✅ **Submission Received!**\n\n**Contributor:** <@${interaction.user.id}>\n**Video URL:** ${videoUrl}\n**Reflection:** ${reflection}\n\n*Our team will review your edit. Good luck!*`
+                content: `✅ **Submission Received!**\n\n**Contributor:** <@${interaction.user.id}>\n**TikTok:** ${tiktokUrl}\n**Instagram:** ${instagramUrl}\n**Reflection:** ${reflection}\n\n*Our team will review your edits. Good luck!*`
             });
 
         } catch (error) {

@@ -51,13 +51,22 @@ export async function createOrderService(rawInput: string, productLink: string, 
                 },
                 body: JSON.stringify({
                     name: `🛠️ WORKSHOP | ORDER #${newOrder.id}`,
+                    type: 11, // Public Thread
                     message: {
-                        content: `🚀 **Production Workshop Started for Order #${newOrder.id}**\nThis is the dedicated space for contributors to collaborate, share drafts, and finalize assets.\n\n*Reference Briefing: [Pending...]*`
+                        content: `🚀 **Production Workshop Started for Order #${newOrder.id}**\nThis is the dedicated space for contributors to collaborate and finalize assets.`
                     }
                 }),
             });
-            const workshopData = await workshopRes.json();
-            const workshopThreadId = workshopData.id;
+
+            let workshopThreadId = null;
+            if (workshopRes.ok) {
+                const workshopData = await workshopRes.json();
+                workshopThreadId = workshopData.id;
+                logger.info({ workshopThreadId }, '[Order Service] Workshop thread created');
+            } else {
+                const errorData = await workshopRes.json();
+                logger.error({ errorData }, '[Order Service] Workshop thread creation FAILED');
+            }
 
             // --- STEP B: Create Mission Briefing Thread (Main Forum) ---
             const components = [

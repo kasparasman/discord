@@ -17,7 +17,7 @@ export async function POST(req: Request) {
             throw new Error('DISCORD_TOKEN missing');
         }
 
-        // 1. HANDLE ENROLLMENT CLOSING (Phase 1)
+        // 1. HANDLE ENROLLMENT CLOSING (Phase 1 - 24h)
         if (phase === 'ENROLLMENT_CLOSED') {
             const msgRes = await fetch(`https://discord.com/api/v10/channels/${threadId}/messages/${threadId}`, {
                 headers: { "Authorization": `Bot ${process.env.DISCORD_TOKEN}` }
@@ -26,11 +26,12 @@ export async function POST(req: Request) {
             if (msgRes.ok) {
                 const msgData = await msgRes.json();
 
-                const disabledComponents = msgData.components.map((row: any) => ({
+                // Disable ONLY Accept/Deny, Keep "Submit Video" active
+                const phase1Components = msgData.components.map((row: any) => ({
                     ...row,
                     components: row.components.map((btn: any) => ({
                         ...btn,
-                        disabled: true
+                        disabled: btn.custom_id.includes('accept') || btn.custom_id.includes('deny')
                     }))
                 }));
 
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
                         "Content-Type": "application/json",
                         "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
                     },
-                    body: JSON.stringify({ components: disabledComponents })
+                    body: JSON.stringify({ components: phase1Components })
                 });
 
                 await fetch(`https://discord.com/api/v10/channels/${threadId}/messages`, {
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
                         "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
                     },
                     body: JSON.stringify({
-                        content: "🔒 **Enrollment Closed.** The 24-hour intake window has ended. No new participants can join."
+                        content: "🔒 **Enrollment Closed.** The intake window has ended. Enrolled contributors have 24 hours remaining to submit."
                     })
                 });
 
@@ -65,7 +66,6 @@ export async function POST(req: Request) {
                     })
                 });
 
-                // Sync DB Status
                 await prisma.order.update({
                     where: { id: parseInt(orderId) },
                     data: { status: 'IN_PROGRESS' }
@@ -73,8 +73,34 @@ export async function POST(req: Request) {
             }
         }
 
-        // 2. HANDLE SUBMISSION DEADLINE (Phase 2)
+        // 2. HANDLE SUBMISSION DEADLINE (Phase 2 - 48h)
         if (phase === 'SUBMISSION_CLOSED') {
+            const msgRes = await fetch(`https://discord.com/api/v10/channels/${threadId}/messages/${threadId}`, {
+                headers: { "Authorization": `Bot ${process.env.DISCORD_TOKEN}` }
+            });
+
+            if (msgRes.ok) {
+                const msgData = await msgRes.json();
+
+                // Disable ALL buttons (Submit Video included)
+                const phase2Components = msgData.components.map((row: any) => ({
+                    ...row,
+                    components: row.components.map((btn: any) => ({
+                        ...btn,
+                        disabled: true
+                    }))
+                }));
+
+                await fetch(`https://discord.com/api/v10/channels/${threadId}/messages/${threadId}`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
+                    },
+                    body: JSON.stringify({ components: phase2Components })
+                });
+            }
+
             await fetch(`https://discord.com/api/v10/channels/${threadId}/messages`, {
                 method: "POST",
                 headers: {
@@ -82,7 +108,7 @@ export async function POST(req: Request) {
                     "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
                 },
                 body: JSON.stringify({
-                    content: "🏁 **Submission Deadline Hit.** The 48-hour submission window is now closed."
+                    content: "🏁 **Submission Deadline Hit.** The submission window is now closed. Good luck to everyone who submitted!"
                 })
             });
 
@@ -97,7 +123,6 @@ export async function POST(req: Request) {
                 })
             });
 
-            // Sync DB Status
             await prisma.order.update({
                 where: { id: parseInt(orderId) },
                 data: { status: 'COMPLETED' }
