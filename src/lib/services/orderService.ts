@@ -3,7 +3,14 @@ import { prisma } from "../prisma";
 import { logger } from "../../utils/logger";
 
 export async function createOrderService(rawInput: string, productLink: string, reward: number) {
-    logger.info({ rawInput: rawInput.slice(0, 50) + '...' }, '[Order Service] Starting createOrderService');
+    const isTest = process.env.TEST_MODE === 'true';
+    logger.info({ rawInput: rawInput.slice(0, 50) + '...', isTest }, '[Order Service] Starting createOrderService');
+
+    const enrollmentDelay = isTest ? "1m" : "24h";
+    const submissionDelay = isTest ? "2m" : "48h";
+    const enrollmentTimeMs = isTest ? 60 * 1000 : 24 * 60 * 60 * 1000;
+    const submissionTimeMs = isTest ? 120 * 1000 : 48 * 60 * 60 * 1000;
+
     logger.info('[Order Service] Requesting AI completion from OpenAI...');
     const completion = await openai.chat.completions.create({
         model: "gpt-4-turbo",
@@ -53,8 +60,8 @@ export async function createOrderService(rawInput: string, productLink: string, 
             ];
 
             const nowUnix = Math.floor(Date.now() / 1000);
-            const enrollmentUnix = nowUnix + (24 * 60 * 60); // 24 hours
-            const submissionUnix = nowUnix + (48 * 60 * 60); // 48 hours
+            const enrollmentUnix = nowUnix + Math.floor(enrollmentTimeMs / 1000);
+            const submissionUnix = nowUnix + Math.floor(submissionTimeMs / 1000);
 
             const discordRes = await fetch(`https://discord.com/api/v10/channels/${process.env.DISCORD_FORUM_CHANNEL_ID}/threads`, {
                 method: "POST",
@@ -63,14 +70,14 @@ export async function createOrderService(rawInput: string, productLink: string, 
                     "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
                 },
                 body: JSON.stringify({
-                    name: `ORDER #${newOrder.id} | ${rawInput.slice(0, 25).toUpperCase()}...`,
+                    name: `ORDER #${newOrder.id} | ${isTest ? '[TEST] ' : ''}${rawInput.slice(0, 20).toUpperCase()}...`,
                     applied_tags: ["1466317856399425557"], // [Open Order] Tag
                     message: {
                         embeds: [
                             {
-                                title: "📄 MISSION BRIEFING",
+                                title: isTest ? "🧪 TEST MISSION BRIEFING" : "📄 MISSION BRIEFING",
                                 description: aiBrief,
-                                color: 5763719,
+                                color: isTest ? 15548997 : 5763719,
                                 fields: [
                                     {
                                         name: "💰 REWARD",
@@ -94,7 +101,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
                                     }
                                 ],
                                 footer: {
-                                    text: "Once enrollment closes, you cannot enter this production cycle.",
+                                    text: isTest ? "🧪 TEST MODE: Deadlines accelerated for testing." : "Once enrollment closes, you cannot enter this production cycle.",
                                 },
                                 timestamp: new Date().toISOString(),
                             },
@@ -113,23 +120,23 @@ export async function createOrderService(rawInput: string, productLink: string, 
                     where: { id: newOrder.id },
                     data: {
                         discordThreadId: responseData.id,
-                        enrollmentExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                        submissionExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+                        enrollmentExpiresAt: new Date(Date.now() + enrollmentTimeMs),
+                        submissionExpiresAt: new Date(Date.now() + submissionTimeMs)
                     }
                 });
 
                 // --- QSTASH SCHEDULING ---
                 if (process.env.QSTASH_TOKEN && process.env.APP_URL) {
-                    logger.info('[Order Service] Scheduling mission phases via QStash');
+                    logger.info({ enrollmentDelay, submissionDelay }, '[Order Service] Scheduling mission phases via QStash');
                     const qstashUrl = `https://qstash.upstash.io/v2/publish/${process.env.APP_URL}/api/expire-enrollment`;
 
-                    // Phase 1: Close Enrollment (24h)
+                    // Phase 1: Close Enrollment
                     await fetch(qstashUrl, {
                         method: "POST",
                         headers: {
                             "Authorization": `Bearer ${process.env.QSTASH_TOKEN}`,
                             "Content-Type": "application/json",
-                            "Upstash-Delay": "24h"
+                            "Upstash-Delay": enrollmentDelay
                         },
                         body: JSON.stringify({
                             orderId: newOrder.id,
@@ -138,13 +145,13 @@ export async function createOrderService(rawInput: string, productLink: string, 
                         })
                     });
 
-                    // Phase 2: Submission Deadline (48h)
+                    // Phase 2: Submission Deadline
                     await fetch(qstashUrl, {
                         method: "POST",
                         headers: {
                             "Authorization": `Bearer ${process.env.QSTASH_TOKEN}`,
                             "Content-Type": "application/json",
-                            "Upstash-Delay": "48h"
+                            "Upstash-Delay": submissionDelay
                         },
                         body: JSON.stringify({
                             orderId: newOrder.id,
