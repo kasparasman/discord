@@ -26,11 +26,11 @@ export async function POST(req: Request) {
         return Response.json({ type: InteractionResponseType.PONG });
     }
 
-    // 3. Handle Commands (Your Agent Logic goes here)
-    return Response.json({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { content: "Ninja Bot is alive!" },
-    });
+    // 3. Handle Other Interactions (Fallback)
+    // If you want to handle buttons here, you would add logic for interaction.data.custom_id
+    // For now, we return a 200 to acknowledge, but it's best to remove the URL from Dev Portal
+    // so that the bot.js Gateway listener handles it instead.
+    return new Response('Handled', { status: 200 });
 }
 
 export async function GET() {

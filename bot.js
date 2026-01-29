@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
 const { neon } = require('@neondatabase/serverless');
 
 if (!process.env.DATABASE_URL) {
@@ -79,48 +79,75 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isButton()) return;
 
-    // customId format: accept_order_123 or deny_order_123
     const [action, type, orderId] = interaction.customId.split('_');
+    if (type !== 'order') return;
 
-    if (type === 'order') {
-        const member = interaction.member;
-        const isPublisher = member.roles.cache.some(role => role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase());
+    const member = interaction.member;
+    const isPublisher = member.roles.cache.some(role => role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase());
 
-        if (!isPublisher) {
-            return interaction.reply({
-                content: `❌ Only users with the **${PUBLISHER_ROLE_NAME}** role can accept missions.`,
-                ephemeral: true
-            });
-        }
+    if (!isPublisher) {
+        return interaction.reply({
+            content: `❌ Only users with the **${PUBLISHER_ROLE_NAME}** role can accept missions.`,
+            flags: [MessageFlags.Ephemeral]
+        });
+    }
 
-        if (action === 'accept') {
-            try {
-                console.log(`📝 Processsing acceptance for Order #${orderId} by ${interaction.user.username}`);
+    if (action === 'accept') {
+        try {
+            // 1. Acknowledge immediately to prevent "Interaction Failed"
+            // We use deferUpdate() if we don't want to send a NEW message, 
+            // but since we want to confirm, we can just use reply() with ephemeral: true
 
-                // Update Database Status to "ACCEPTED"
-                await sql`
-                    UPDATE orders 
-                    SET status = 'ACCEPTED' 
-                    WHERE id = ${parseInt(orderId)};
-                `;
+            console.log(`📝 Processing pool entry for Order #${orderId} by ${interaction.user.username}`);
 
-                // Respond to Discord
-                await interaction.reply({
-                    content: `✅ Mission #${orderId} accepted by ${interaction.user.username}!`,
-                    ephemeral: false
+            // 2. Ensure the Publisher exists (Upsert)
+            const [localPublisher] = await sql`
+                INSERT INTO publishers (discord_id, username, is_active)
+                VALUES (${interaction.user.id}, ${interaction.user.username}, true)
+                ON CONFLICT (discord_id) 
+                DO UPDATE SET username = EXCLUDED.username
+                RETURNING id;
+            `;
+
+            // 3. CHECK FOR DUPLICATE: Has this user already accepted?
+            const [existing] = await sql`
+                SELECT id FROM order_participants 
+                WHERE order_id = ${parseInt(orderId)} 
+                AND publisher_id = ${localPublisher.id}
+                LIMIT 1;
+            `;
+
+            if (existing) {
+                return interaction.reply({
+                    content: `👋 You've already joined the pool for **Mission #${orderId}**. Stay tuned!`,
+                    flags: [MessageFlags.Ephemeral]
                 });
+            }
 
-                // Disable the buttons so no one else can click them
-                await interaction.message.edit({ components: [] });
-            } catch (error) {
-                console.error('❌ Failed to update order in DB:', error);
-                await interaction.reply({ content: '❌ Error processing acceptance. Please try again.', ephemeral: true });
+            // 4. Add to the Order Pool (order_participants table)
+            await sql`
+                INSERT INTO order_participants (order_id, publisher_id)
+                VALUES (${parseInt(orderId)}, ${localPublisher.id});
+            `;
+
+            // 5. Simple confirmation
+            await interaction.reply({
+                content: `✅ **Mission #${orderId} Accepted!** You've been added to the pool. Good luck! 🚀`,
+                flags: [MessageFlags.Ephemeral]
+            });
+
+        } catch (error) {
+            console.error('❌ Failed to process pool entry:', error);
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: '❌ Error joining the pool. Please try again.', flags: [MessageFlags.Ephemeral] });
+            } else {
+                await interaction.reply({ content: '❌ Error joining the pool. Please try again.', flags: [MessageFlags.Ephemeral] });
             }
         }
+    }
 
-        if (action === 'deny') {
-            await interaction.reply({ content: '❌ Mission denied.', ephemeral: true });
-        }
+    if (action === 'deny') {
+        await interaction.reply({ content: '❌ Mission denied. Feel free to ignore.', flags: [MessageFlags.Ephemeral] });
     }
 });
 

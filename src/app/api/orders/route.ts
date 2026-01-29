@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createOrderService } from '@/lib/services/orderService';
-import { logger } from '@/utils/logger';
+import { createOrderService } from "../../../lib/services/orderService";
+import { logger } from "../../../utils/logger";
 
 export async function POST(req: Request) {
     logger.info(`[Orders API] POST request received`);

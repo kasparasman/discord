@@ -511,28 +511,42 @@ model ModuleSection {
 }
 
 model Order {
-  id              Int          @id @default(autoincrement())
-  rawInput        String       @map("raw_input")
-  briefContent    String?      @map("brief_content")
-  productLink     String?      @map("product_link")
-  rewardAmount    Int?         @map("reward_amount")
-  status          String       @default("OPEN") @db.VarChar(20)
-  discordThreadId String?      @map("discord_thread_id")
-  createdAt       DateTime     @default(now()) @map("created_at")
+  id              Int                @id @default(autoincrement())
+  rawInput        String             @map("raw_input")
+  briefContent    String?            @map("brief_content")
+  productLink     String?            @map("product_link")
+  rewardAmount    Int?               @map("reward_amount")
+  status          String             @default("OPEN") @db.VarChar(20)
+  discordThreadId String?            @map("discord_thread_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
   submissions     Submission[]
+  participants    OrderParticipant[]
 
   @@map("orders")
 }
 
+model OrderParticipant {
+  id          Int       @id @default(autoincrement())
+  orderId     Int       @map("order_id")
+  publisherId Int       @map("publisher_id")
+  acceptedAt  DateTime  @default(now()) @map("accepted_at")
+  order       Order     @relation(fields: [orderId], references: [id])
+  publisher   Publisher @relation(fields: [publisherId], references: [id])
+
+  @@unique([orderId, publisherId])
+  @@map("order_participants")
+}
+
 model Publisher {
-  id              Int          @id @default(autoincrement())
-  discordId       String       @unique @map("discord_id")
+  id              Int                @id @default(autoincrement())
+  discordId       String             @unique @map("discord_id")
   username        String?
-  walletAddress   String?      @map("wallet_address")
-  reputationScore Int          @default(0) @map("reputation_score")
-  isActive        Boolean      @default(true) @map("is_active")
-  createdAt       DateTime     @default(now()) @map("created_at")
+  walletAddress   String?            @map("wallet_address")
+  reputationScore Int                @default(0) @map("reputation_score")
+  isActive        Boolean            @default(true) @map("is_active")
+  createdAt       DateTime           @default(now()) @map("created_at")
   submissions     Submission[]
+  participations  OrderParticipant[]
 
   @@map("publishers")
 }
