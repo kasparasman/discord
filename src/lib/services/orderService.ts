@@ -4,8 +4,7 @@ import { logger } from "../../utils/logger";
 
 export async function createOrderService(rawInput: string, productLink: string, reward: number) {
     logger.info({ rawInput: rawInput.slice(0, 50) + '...' }, '[Order Service] Starting createOrderService');
-    logger.info('[Order Service] Requesting AI compilation');
-
+    logger.info('[Order Service] Requesting AI completion from OpenAI...');
     const completion = await openai.chat.completions.create({
         model: "gpt-4-turbo",
         messages: [
@@ -15,10 +14,10 @@ export async function createOrderService(rawInput: string, productLink: string, 
     });
 
     const aiBrief = completion.choices[0].message.content;
-    logger.info('[Order Service] AI compilation complete');
+    logger.info('[Order Service] AI compilation successful');
 
-    logger.info('[Order Service] Saving order to database');
-    const newOrder = await prisma.order.create({
+    logger.info('[Order Service] Attempting to save order to Neon DB...');
+    let newOrder = await prisma.order.create({
         data: {
             rawInput,
             briefContent: aiBrief || '',
@@ -27,7 +26,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
             status: "OPEN"
         }
     });
-    logger.info({ orderId: newOrder.id }, '[Order Service] Order saved to database');
+    logger.info({ orderId: newOrder.id }, '[Order Service] Order saved successfully');
 
     // 3. BROADCAST TO DISCORD (via BOT REST API)
     if (process.env.DISCORD_TOKEN && process.env.DISCORD_FORUM_CHANNEL_ID) {
@@ -110,7 +109,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
             if (discordRes.ok) {
                 logger.info({ threadId: responseData.id }, '[Order Service] Discord thread created with buttons');
 
-                await prisma.order.update({
+                newOrder = await prisma.order.update({
                     where: { id: newOrder.id },
                     data: {
                         discordThreadId: responseData.id,

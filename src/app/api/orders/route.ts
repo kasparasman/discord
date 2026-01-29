@@ -7,6 +7,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
+        logger.info({ body }, '[Orders API] Request body parsed');
         const { rawInput, productLink, reward } = body;
 
         if (!rawInput || !productLink || reward === undefined) {
