@@ -284,6 +284,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         try {
+            // DEFER REPLY: Buy 15 minutes of time to prevent 3s timeout
+            await interaction.deferReply();
+
             console.log(`📥 Processing dual-link submission for Order #${orderId} by ${interaction.user.username}`);
 
             const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
@@ -294,46 +297,49 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 VALUES (${parseInt(orderId)}, ${localPublisher.id}, ${tiktokUrl}, ${instagramUrl}, ${reflection}, 'PENDING_REVIEW');
             `;
 
-            // 2. CHECK IF TRACKING SHOULD START
+            // 2. CHECK IF TRACKING SHOULD START (Non-blocking)
             // Logic: If this is the first submission for this order, launch the algorithm
-            const [orderInfo] = await sql`
-                SELECT is_tracking, scrape_count FROM orders WHERE id = ${parseInt(orderId)} FOR UPDATE;
-            `;
+            // We do NOT 'await' this to keep the Discord response snappy
+            const startTracking = async () => {
+                try {
+                    const [orderInfo] = await sql`
+                        SELECT is_tracking, scrape_count FROM orders WHERE id = ${parseInt(orderId)} FOR UPDATE;
+                    `;
 
-            if (orderInfo && !orderInfo.is_tracking && orderInfo.scrape_count === 0) {
-                console.log(`🚀 [Bot] First submission detected for Order #${orderId}. Launching Tracking Algorithm...`);
+                    if (orderInfo && !orderInfo.is_tracking && orderInfo.scrape_count === 0) {
+                        console.log(`🚀 [Bot] First submission detected for Order #${orderId}. Launching Tracking Algorithm...`);
 
-                // Trigger the tracking API immediately
-                if (process.env.APP_URL) {
-                    const trackingUrl = `${process.env.APP_URL.replace(/\/$/, '')}/api/track-order`;
-                    console.log(`📡 [Bot] Sending request to: ${trackingUrl}`);
-
-                    try {
-                        const response = await fetch(trackingUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ orderId: orderId })
-                        });
-
-                        const responseBody = await response.text();
-                        console.log(`📡 [Bot] Target API Status: ${response.status}`);
-                        console.log(`📡 [Bot] Target API Response: ${responseBody}`);
-                    } catch (fetchErr) {
-                        console.error('❌ [Bot] Network error triggering tracking API:', fetchErr.message);
+                        if (process.env.APP_URL) {
+                            const trackingUrl = `${process.env.APP_URL.replace(/\/$/, '')}/api/track-order`;
+                            const response = await fetch(trackingUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId: orderId })
+                            });
+                            const responseBody = await response.text();
+                            console.log(`📡 [Bot] Tracking API Status: ${response.status} - ${responseBody}`);
+                        }
                     }
-                } else {
-                    console.error('❌ [Bot] APP_URL is missing from environment. Tracking failed to launch.');
+                } catch (err) {
+                    console.error('❌ [Bot] Tracking trigger failed:', err.message);
                 }
-            }
+            };
+
+            // Launch tracking in background
+            startTracking();
 
             // 3. Post success to the thread
-            await interaction.reply({
+            await interaction.editReply({
                 content: `✅ **Submission Received!**\n\n**Contributor:** <@${interaction.user.id}>\n**TikTok:** ${tiktokUrl}\n**Instagram:** ${instagramUrl}\n**Reflection:** ${reflection}\n\n*Our team will review your edits. Good luck!*`
             });
 
         } catch (error) {
             console.error('❌ Failed to save submission:', error);
-            await interaction.reply({ content: '❌ Error saving your submission. Please try again.', flags: [MessageFlags.Ephemeral] });
+            if (interaction.deferred) {
+                await interaction.editReply({ content: '❌ Error saving your submission. Please try again.' });
+            } else {
+                await interaction.reply({ content: '❌ Error saving your submission. Please try again.', flags: [MessageFlags.Ephemeral] });
+            }
         }
     }
 });
