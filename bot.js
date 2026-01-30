@@ -13,6 +13,10 @@ const { neon } = require('@neondatabase/serverless');
 console.log('--- 🛡️ SYSTEM STARTUP 🛡️ ---');
 console.log('📍 App URL:', process.env.APP_URL || '❌ MISSING');
 console.log('📍 Database:', process.env.DATABASE_URL ? '✅ Connected' : '❌ MISSING');
+
+// DEEP DEBUG: List all keys to find typos
+console.log('🔑 Available Env Keys:', Object.keys(process.env).filter(k => !k.includes('TOKEN') && !k.includes('KEY') && !k.includes('URL')).join(', '));
+console.log('🔗 URL-related Keys:', Object.keys(process.env).filter(k => k.includes('URL')).join(', '));
 console.log('---------------------------');
 
 if (!process.env.DATABASE_URL) {
