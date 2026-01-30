@@ -263,7 +263,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             return interaction.reply({ content: "❌ **Invalid TikTok URL.** Please provide a valid link from tiktok.com", flags: [MessageFlags.Ephemeral] });
         }
         if (!isInstagram(instagramUrl)) {
-            return interaction.reply({ content: "❌ **Invalid Instagram URL.** Please provide a valid leak from instagram.com", flags: [MessageFlags.Ephemeral] });
+            return interaction.reply({ content: "❌ **Invalid Instagram URL.** Please provide a valid link from instagram.com", flags: [MessageFlags.Ephemeral] });
         }
 
         try {
@@ -286,13 +286,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
             if (orderInfo && !orderInfo.is_tracking && orderInfo.scrape_count === 0) {
                 console.log(`🚀 [Bot] First submission detected for Order #${orderId}. Launching Tracking Algorithm...`);
 
-                // Trigger the tracking API immediately (or it will schedule itself)
+                // Trigger the tracking API immediately
                 if (process.env.APP_URL) {
-                    fetch(`${process.env.APP_URL}/api/track-order`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ orderId: orderId })
-                    }).catch(err => console.error('❌ Failed to trigger tracking API:', err));
+                    const trackingUrl = `${process.env.APP_URL.replace(/\/$/, '')}/api/track-order`;
+                    console.log(`📡 [Bot] Sending request to: ${trackingUrl}`);
+
+                    try {
+                        const response = await fetch(trackingUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ orderId: orderId })
+                        });
+
+                        const responseBody = await response.text();
+                        console.log(`📡 [Bot] Target API Status: ${response.status}`);
+                        console.log(`📡 [Bot] Target API Response: ${responseBody}`);
+                    } catch (fetchErr) {
+                        console.error('❌ [Bot] Network error triggering tracking API:', fetchErr.message);
+                    }
+                } else {
+                    console.error('❌ [Bot] APP_URL is missing from environment. Tracking failed to launch.');
                 }
             }
 
