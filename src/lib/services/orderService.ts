@@ -39,36 +39,9 @@ export async function createOrderService(rawInput: string, productLink: string, 
     if (process.env.DISCORD_TOKEN && process.env.DISCORD_FORUM_CHANNEL_ID) {
         logger.info('[Order Service] Broadcasting to Discord');
         try {
-            const WORKSHOP_CHANNEL_ID = "1466334267465531432";
+            const WORKSHOP_CHANNEL_ID = "1464188183402119249";
 
-            // --- STEP A: Create Production Workshop Thread ---
-            logger.info('[Order Service] Creating Production Workshop thread');
-            const workshopRes = await fetch(`https://discord.com/api/v10/channels/${WORKSHOP_CHANNEL_ID}/threads`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
-                },
-                body: JSON.stringify({
-                    name: `🛠️ WORKSHOP | ORDER #${newOrder.id}`,
-                    type: 11, // Public Thread
-                    message: {
-                        content: `🚀 **Production Workshop Started for Order #${newOrder.id}**\nThis is the dedicated space for contributors to collaborate and finalize assets.`
-                    }
-                }),
-            });
-
-            let workshopThreadId = null;
-            if (workshopRes.ok) {
-                const workshopData = await workshopRes.json();
-                workshopThreadId = workshopData.id;
-                logger.info({ workshopThreadId }, '[Order Service] Workshop thread created');
-            } else {
-                const errorData = await workshopRes.json();
-                logger.error({ errorData }, '[Order Service] Workshop thread creation FAILED');
-            }
-
-            // --- STEP B: Create Mission Briefing Thread (Main Forum) ---
+            // --- STEP A: Create Mission Briefing Thread (Main Forum) ---
             const components = [
                 {
                     type: 1, // Action Row
@@ -127,7 +100,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
                                     },
                                     {
                                         name: "🏗️ PRODUCTION ROOM",
-                                        value: workshopThreadId ? `<#${workshopThreadId}>` : "Created pending...",
+                                        value: `<#${WORKSHOP_CHANNEL_ID}>`,
                                         inline: true,
                                     },
                                     {
@@ -155,27 +128,12 @@ export async function createOrderService(rawInput: string, productLink: string, 
             const responseData = await discordRes.json();
 
             if (discordRes.ok) {
-                logger.info({ threadId: responseData.id, workshopId: workshopThreadId }, '[Order Service] Both threads created');
-
-                // Update Workshop with link to Briefing
-                if (workshopThreadId && responseData.id) {
-                    await fetch(`https://discord.com/api/v10/channels/${workshopThreadId}/messages`, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
-                        },
-                        body: JSON.stringify({
-                            content: `🔗 **Mission Briefing Link:** <#${responseData.id}>`
-                        })
-                    });
-                }
+                logger.info({ threadId: responseData.id }, '[Order Service] Mission briefing thread created');
 
                 newOrder = await prisma.order.update({
                     where: { id: newOrder.id },
                     data: {
                         discordThreadId: responseData.id,
-                        workshopThreadId: workshopThreadId, // Store the workshop ID too
                         enrollmentExpiresAt: new Date(Date.now() + enrollmentTimeMs),
                         submissionExpiresAt: new Date(Date.now() + submissionTimeMs)
                     }
