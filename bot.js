@@ -1,9 +1,22 @@
+const fs = require('fs');
+const path = require('path');
+
+// 1. Load ENVs in order of priority: .env.local (if exists) then .env
+if (fs.existsSync(path.join(__dirname, '.env.local'))) {
+    require('dotenv').config({ path: '.env.local' });
+}
 require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { neon } = require('@neondatabase/serverless');
 
+// 2. Immediate Diagnostic Log
+console.log('--- 🛡️ SYSTEM STARTUP 🛡️ ---');
+console.log('📍 App URL:', process.env.APP_URL || '❌ MISSING');
+console.log('📍 Database:', process.env.DATABASE_URL ? '✅ Connected' : '❌ MISSING');
+console.log('---------------------------');
+
 if (!process.env.DATABASE_URL) {
-    console.error("❌ Error: DATABASE_URL is not defined in the environment.");
+    console.error("❌ CRITICAL: DATABASE_URL is missing. Bot cannot start.");
     process.exit(1);
 }
 
