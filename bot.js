@@ -271,13 +271,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
 
-            // Insert into DB
+            // 1. Save to DB
             await sql`
                 INSERT INTO submissions (order_id, user_id, tiktok_link, instagram_link, reflection, status)
                 VALUES (${parseInt(orderId)}, ${localPublisher.id}, ${tiktokUrl}, ${instagramUrl}, ${reflection}, 'PENDING_REVIEW');
             `;
 
-            // Post success to the thread
+            // 2. CHECK IF TRACKING SHOULD START
+            // Logic: If this is the first submission for this order, launch the algorithm
+            const [orderInfo] = await sql`
+                SELECT is_tracking, scrape_count FROM orders WHERE id = ${parseInt(orderId)} FOR UPDATE;
+            `;
+
+            if (orderInfo && !orderInfo.is_tracking && orderInfo.scrape_count === 0) {
+                console.log(`🚀 [Bot] First submission detected for Order #${orderId}. Launching Tracking Algorithm...`);
+
+                // Trigger the tracking API immediately (or it will schedule itself)
+                if (process.env.APP_URL) {
+                    fetch(`${process.env.APP_URL}/api/track-order`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ orderId: orderId })
+                    }).catch(err => console.error('❌ Failed to trigger tracking API:', err));
+                }
+            }
+
+            // 3. Post success to the thread
             await interaction.reply({
                 content: `✅ **Submission Received!**\n\n**Contributor:** <@${interaction.user.id}>\n**TikTok:** ${tiktokUrl}\n**Instagram:** ${instagramUrl}\n**Reflection:** ${reflection}\n\n*Our team will review your edits. Good luck!*`
             });

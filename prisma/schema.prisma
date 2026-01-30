@@ -13,10 +13,14 @@ model Product {
   title       String
   description String
   link        String
-  investment  String
-  act         String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  sectorId    Int?
+  investment  Int      @default(0)
+  act         Int      @default(0)
+  sectors     Sector?  @relation(fields: [sectorId], references: [id], onUpdate: NoAction)
+
+  @@index([sectorId])
 }
 
 /// ─────────────────────────────────────────────────────────────────────────────
@@ -36,12 +40,12 @@ model Profile {
   status               String                @default("PENDING")
   deletedAt            DateTime?
   deletionReason       String?
-  joinSequence         Int?                  @unique
   gender               String?
   styleUrl             String?
   styleId              String?
   error                String?
   isRegistered         Boolean               @default(false)
+  joinSequence         Int?                  @unique
   billingAccount       BillingAccount?       @relation("ProfileBilling")
   biometricEnrollment  BiometricEnrollment?  @relation("ProfileBiometric")
   regSessions          RegistrationSession[]
@@ -68,23 +72,23 @@ model Profile {
 model BillingAccount {
   id                String             @id @default(cuid())
   profileId         String             @unique
-  stripeCustomerId  String             @unique
   subscriptionId    String?            @unique
   priceId           String?
-  amount            Int?
-  currency          String?
-  interval          String?
   status            BillingStatus      @default(ACTIVE)
   currentPeriodEnd  DateTime?
   taxId             String?
-  activatedAt       DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  subStatus         SubscriptionStatus @default(none)
   cancelAtPeriodEnd Boolean            @default(false)
   canceledAt        DateTime?
   endsAt            DateTime?
   entitled          Boolean            @default(false)
+  stripeCustomerId  String             @unique
+  subStatus         SubscriptionStatus @default(none)
+  amount            Int?
+  currency          String?
+  interval          String?
+  activatedAt       DateTime?          @db.Timestamp(6)
   profile           Profile            @relation("ProfileBilling", fields: [profileId], references: [id])
   invoices          Invoice[]
 
@@ -155,42 +159,15 @@ model WebAuthnCredential {
 /// CITY ASSETS (SECTORS + COMPANIES)
 /// ─────────────────────────────────────────────────────────────────────────────
 model Sector {
-  id        Int       @id @default(autoincrement())
-  name      String
-  slug      String    @unique
-  colorHex  String
-  order     Int       @default(0)
-  companies Company[]
+  id       Int       @id @default(autoincrement())
+  name     String
+  slug     String    @unique
+  colorHex String
+  order    Int       @default(0)
+  Product  Product[]
 
   @@index([order])
   @@map("sectors")
-}
-
-model Company {
-  id               Int      @id @default(autoincrement())
-  name             String
-  slug             String   @unique
-  description      String?
-  logoUrl          String
-  websiteUrl       String?
-  category         String?
-  sectorId         Int
-  totalInvestment  Float    @default(0)
-  tokenCount       Float    @default(0)
-  discountMin      Int?
-  discountMax      Int?
-  isActive         Boolean  @default(true)
-  order            Int      @default(0)
-  logoClassDesktop String?
-  logoClassMobile  String?
-  createdAt        DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt
-  sector           Sector   @relation(fields: [sectorId], references: [id])
-
-  @@index([sectorId])
-  @@index([isActive])
-  @@index([order])
-  @@map("companies")
 }
 
 /// ─────────────────────────────────────────────────────────────────────────────
@@ -429,9 +406,9 @@ model StripeEvent {
 model ActWallet {
   id         String   @id @default(cuid())
   profileId  String   @unique
-  balanceAct Decimal  @default(0) @db.Decimal(36, 18)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  balanceAct Decimal  @default(0) @db.Decimal(36, 18)
   profile    Profile  @relation("ProfileActWallet", fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
@@ -441,15 +418,15 @@ model ActWallet {
 model ActTransaction {
   id              String               @id @default(cuid())
   profileId       String
-  type            ActTransactionType
-  amountAct       Decimal              @db.Decimal(36, 18)
   amountFiat      Decimal?             @db.Decimal(18, 2)
+  createdAt       DateTime             @default(now())
+  amountAct       Decimal              @db.Decimal(36, 18)
   fiatCurrency    String?              @db.VarChar(8)
   providerOrderId String?
   providerTxId    String?
-  status          ActTransactionStatus @default(PENDING)
   rawPayload      Json?
-  createdAt       DateTime             @default(now())
+  type            ActTransactionType
+  status          ActTransactionStatus @default(PENDING)
   profile         Profile              @relation("ProfileActTransactions", fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, createdAt(sort: Desc)])
@@ -511,19 +488,22 @@ model ModuleSection {
 }
 
 model Order {
-  id              Int                @id @default(autoincrement())
-  rawInput        String             @map("raw_input")
-  briefContent    String?            @map("brief_content")
-  productLink     String?            @map("product_link")
-  rewardAmount    Int?               @map("reward_amount")
+  id                  Int                @id @default(autoincrement())
+  rawInput            String             @map("raw_input")
+  briefContent        String?            @map("brief_content")
+  productLink         String?            @map("product_link")
+  rewardAmount        Int?               @map("reward_amount")
   status              String             @default("OPEN") @db.VarChar(20)
   discordThreadId     String?            @map("discord_thread_id")
-  workshopThreadId    String?            @map("workshop_thread_id")
+  createdAt           DateTime           @default(now()) @map("created_at")
   enrollmentExpiresAt DateTime?          @map("enrollment_expires_at")
   submissionExpiresAt DateTime?          @map("submission_expires_at")
-  createdAt           DateTime       @default(now()) @map("created_at")
-  submissions     Submission[]
-  participants    OrderParticipant[]
+  workshopThreadId    String?            @map("workshop_thread_id")
+  participants        OrderParticipant[]
+  scrapeCount         Int                @default(0) @map("scrape_count")
+  trackingStartedAt   DateTime?          @map("tracking_started_at")
+  isTracking          Boolean            @default(false) @map("is_tracking")
+  submissions         Submission[]
 
   @@map("orders")
 }
@@ -548,63 +528,51 @@ model Publisher {
   reputationScore Int                @default(0) @map("reputation_score")
   isActive        Boolean            @default(true) @map("is_active")
   createdAt       DateTime           @default(now()) @map("created_at")
-  submissions     Submission[]
   participations  OrderParticipant[]
+  submissions     Submission[]
 
   @@map("publishers")
 }
 
 model Submission {
-  id              Int       @id @default(autoincrement())
-  orderId         Int       @map("order_id")
-  userId          Int?      @map("user_id")
-  tiktokLink      String    @map("tiktok_link")
-  instagramLink   String    @map("instagram_link")
-  platformVideoId String?   @map("platform_video_id")
-  status          String    @default("PENDING_REVIEW") @db.VarChar(20)
-  initialViews    Int       @default(0) @map("initial_views")
-  final24hViews   Int       @default(0) @map("final_24h_views")
-  likes           Int       @default(0)
-  shares          Int       @default(0)
-  reflection      String?   @db.Text
-  submittedAt     DateTime  @default(now()) @map("submitted_at")
-  order           Order     @relation(fields: [orderId], references: [id])
+  id              Int        @id @default(autoincrement())
+  orderId         Int        @map("order_id")
+  userId          Int?       @map("user_id")
+  platformVideoId String?    @map("platform_video_id")
+  status          String     @default("PENDING_REVIEW") @db.VarChar(20)
+  initialViews    Int        @default(0) @map("initial_views")
+  final24hViews   Int        @default(0) @map("final_24h_views")
+  likes           Int        @default(0)
+  shares          Int        @default(0)
+  submittedAt     DateTime   @default(now()) @map("submitted_at")
+  reflection      String?
+  instagramLink   String     @map("instagram_link")
+  tiktokLink      String     @map("tiktok_link")
+  order           Order      @relation(fields: [orderId], references: [id])
   publisher       Publisher? @relation(fields: [userId], references: [id])
 
   @@map("submissions")
-}
-
-model products {
-  product_id      String    @id @db.VarChar(50)
-  product_name    String?
-  description     String?
-  final_image_url String?
-  bg_color        String?   @db.VarChar(50)
-  chosen_option   String?   @db.VarChar(1)
-  status          String?   @db.VarChar(50)
-  created_at      DateTime? @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @default(now()) @db.Timestamp(6)
 }
 
 enum RegistrationSessionStatus {
   START
   PASS_LIVENESS
   AVATAR_SELECTED
-  ACCOUNT_CREATED
-  EMAIL_SENT
   CREDENTIALS_ATTACHED
   PAYMENT_INITIATED
   PAYMENT_FAILED
   PAYMENT_SUCCEEDED
   PROVISIONING
-  PROVISIONING_AVATAR_DONE
-  PROVISIONING_FACE_INDEXED
-  PROVISIONING_NICKNAME_DONE
   ACTIVE
   EXPIRED
   FAILED_LIVENESS
   ROLLBACK
+  EMAIL_SENT
+  ACCOUNT_CREATED
   FAILED_PROVISION
+  PROVISIONING_AVATAR_DONE
+  PROVISIONING_FACE_INDEXED
+  PROVISIONING_NICKNAME_DONE
 }
 
 enum BillingStatus {
