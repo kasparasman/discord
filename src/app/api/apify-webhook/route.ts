@@ -59,17 +59,16 @@ export async function POST(req: Request) {
                 const comments = (item.commentCount as number) || 0;
 
                 if (tiktokUrl) {
-                    // Normalize the scraper URL: strip params and trailing slash
-                    const cleanScraperUrl = tiktokUrl.split('?')[0].replace(/\/$/, '').toLowerCase();
+                    // Extract numeric ID from TikTok URL (e.g., /video/7195017787113295130)
+                    const ttIdMatch = tiktokUrl.match(/\/video\/(\d+)/);
+                    const ttId = ttIdMatch ? ttIdMatch[1] : null;
 
-                    // Find by matching the clean URL
+                    logger.info({ ttId, originalUrl: tiktokUrl }, '[Apify Webhook] Attempting TikTok match by ID');
+
                     const submission = await prisma.submission.findFirst({
                         where: {
                             orderId: parseInt(orderId),
-                            OR: [
-                                { tiktokLink: { contains: cleanScraperUrl } },
-                                { tiktokLink: { equals: tiktokUrl } }
-                            ]
+                            tiktokLink: ttId ? { contains: ttId } : { contains: tiktokUrl.split('?')[0] }
                         }
                     });
 
@@ -93,16 +92,16 @@ export async function POST(req: Request) {
                 const comments = (item.commentsCount as number) || 0;
 
                 if (igUrl) {
-                    // Normalize the scraper URL: strip params and trailing slash
-                    const cleanScraperUrl = igUrl.split('?')[0].replace(/\/$/, '').toLowerCase();
+                    // Extract shortcode from IG URL (handles /p/, /reel/, /reels/)
+                    const igMatch = igUrl.match(/\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
+                    const shortcode = igMatch ? igMatch[1] : null;
+
+                    logger.info({ shortcode, originalUrl: igUrl }, '[Apify Webhook] Attempting Instagram match by Shortcode');
 
                     const submission = await prisma.submission.findFirst({
                         where: {
                             orderId: parseInt(orderId),
-                            OR: [
-                                { instagramLink: { contains: cleanScraperUrl } },
-                                { instagramLink: { equals: igUrl } }
-                            ]
+                            instagramLink: shortcode ? { contains: shortcode } : { contains: igUrl.split('?')[0] }
                         }
                     });
 

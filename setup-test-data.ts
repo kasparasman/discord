@@ -36,20 +36,20 @@ async function setupTestData() {
             });
         }
 
-        // 3. Create a submission with real viral links for verification
-        // Note: tiktokLink and instagramLink are @unique in current schema
-        // We'll use random-ish strings to avoid conflicts if you run this multiple times
+        // 3. Create a submission with working links provided by the user
         const timestamp = Date.now();
         const submission = await prisma.submission.create({
             data: {
                 orderId: order.id,
                 userId: publisher.id,
-                tiktokLink: `https://www.tiktok.com/@mrbeast/video/7463690615555460382?t=${timestamp}`,
-                instagramLink: `https://www.instagram.com/reels/C-fGOf_SAs_/?t=${timestamp}`,
-                reflection: "Testing the flow",
+                // Using URLs provided by the user
+                tiktokLink: `https://www.tiktok.com/@h0ney229/video/7195017787113295130?test=${timestamp}`,
+                instagramLink: `https://www.instagram.com/reel/DUJJ1W1iS-P/?test=${timestamp}`,
+                reflection: "Testing with working links",
                 status: "PENDING_REVIEW"
             }
         });
+
 
         console.log(`✅ Created Submission #${submission.id} for Order #${order.id}`);
         console.log("\n🚀 NEXT STEP: Trigger the track-order API with this curl command:");

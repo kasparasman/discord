@@ -8,8 +8,8 @@ async function runTest() {
     });
 
     const testUrls = [
-        "https://www.tiktok.com/@mrbeast/video/7463690615555460382",
-        "https://www.instagram.com/reels/C2f9Zf8s8f8/"
+        "https://www.tiktok.com/@h0ney229/video/7195017787113295130",
+        "https://www.instagram.com/reel/DUJJ1W1iS-P/"
     ];
 
 
@@ -46,7 +46,7 @@ async function runTest() {
     console.log('\n--- 📸 Instagram Actor Test ---');
     try {
         const igRun = await client.actor("shu8hvrXbJbY3Eb9W").call({
-            "hashtags": ["fitness"],
+            "directUrls": [testUrls[1]],
             "resultsType": "posts",
             "resultsLimit": 1,
             "searchType": "hashtag",
@@ -55,12 +55,15 @@ async function runTest() {
         });
 
 
+
         const { items: igItems } = await client.dataset(igRun.defaultDatasetId).listItems();
         if (igItems.length > 0) {
             const item = igItems[0];
             console.log('✅ Instagram Data Received');
-            console.log('📍 item.input value:', item.input);
+            console.log('📍 item.url:', item.url);
+            console.log('📍 item.directUrl:', item.directUrl);
             console.log('📍 videoPlayCount:', item.videoPlayCount);
+
             console.log('📍 likesCount:', item.likesCount);
             console.log('📍 commentsCount:', item.commentsCount);
             console.log('📍 Keys available:', Object.keys(item).join(', '));

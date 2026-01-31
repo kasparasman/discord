@@ -1,15 +1,15 @@
 import { prisma } from "./src/lib/prisma";
 
 async function verifyResults() {
-    console.log("🔍 Checking Submission #22 for gathered stats...");
+    console.log("🔍 Checking Submission #24 for gathered stats...");
 
     try {
         const sub = await prisma.submission.findUnique({
-            where: { id: 22 }
+            where: { id: 24 }
         });
 
         if (!sub) {
-            console.log("❌ Submission #22 not found.");
+            console.log("❌ Submission #24 not found.");
             return;
         }
 
