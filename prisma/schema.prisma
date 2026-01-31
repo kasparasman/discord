@@ -559,8 +559,14 @@ model Submission {
   igLikes       Int      @default(0) @map("ig_likes")
   igComments    Int      @default(0) @map("ig_comments")
   igScore       Float    @default(0.0) @map("ig_score") // Computed "Value Score"
+  
+  // -- Thumbnails (Persistent S3 Links) --
+  tiktokThumbnailUrl String? @map("tiktok_thumbnail_url")
+  igThumbnailUrl     String? @map("ig_thumbnail_url")
+
 
   order           Order      @relation(fields: [orderId], references: [id])
+
   publisher       Publisher? @relation(fields: [userId], references: [id])
 
   @@map("submissions")

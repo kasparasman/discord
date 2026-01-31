@@ -57,13 +57,11 @@ export async function POST(req: Request) {
                 const likes = (item.diggCount as number) || 0;
                 const shares = (item.shareCount as number) || 0;
                 const comments = (item.commentCount as number) || 0;
+                const rawThumb = (item.videoMeta as any)?.coverUrl;
 
                 if (tiktokUrl) {
-                    // Extract numeric ID from TikTok URL (e.g., /video/7195017787113295130)
                     const ttIdMatch = tiktokUrl.match(/\/video\/(\d+)/);
                     const ttId = ttIdMatch ? ttIdMatch[1] : null;
-
-                    logger.info({ ttId, originalUrl: tiktokUrl }, '[Apify Webhook] Attempting TikTok match by ID');
 
                     const submission = await prisma.submission.findFirst({
                         where: {
@@ -73,6 +71,13 @@ export async function POST(req: Request) {
                     });
 
                     if (submission) {
+                        let s3ThumbUrl = (submission as any).tiktokThumbnailUrl;
+                        if (!s3ThumbUrl && rawThumb) {
+                            const { uploadFromUrl } = await import('../../../utils/s3');
+                            const key = `thumbnails/tiktok/${submission.id}_${Date.now()}.jpg`;
+                            s3ThumbUrl = await uploadFromUrl(rawThumb, key) || (submission as any).tiktokThumbnailUrl;
+                        }
+
                         await prisma.submission.update({
                             where: { id: submission.id },
                             data: {
@@ -80,9 +85,10 @@ export async function POST(req: Request) {
                                 tiktokLikes: likes,
                                 tiktokShares: shares,
                                 tiktokComments: comments,
-                            }
+                                tiktokThumbnailUrl: s3ThumbUrl
+                            } as any
                         });
-                        logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated TikTok stats');
+                        logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated TikTok stats & thumbnail');
                     }
                 }
             } else if (platform === 'instagram') {
@@ -90,13 +96,11 @@ export async function POST(req: Request) {
                 const views = (item.videoPlayCount as number) || (item.playCount as number) || 0;
                 const likes = (item.likesCount as number) || (item.displayLikesCount as number) || 0;
                 const comments = (item.commentsCount as number) || 0;
+                const rawThumb = (item.displayUrl as string);
 
                 if (igUrl) {
-                    // Extract shortcode from IG URL (handles /p/, /reel/, /reels/)
                     const igMatch = igUrl.match(/\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
                     const shortcode = igMatch ? igMatch[1] : null;
-
-                    logger.info({ shortcode, originalUrl: igUrl }, '[Apify Webhook] Attempting Instagram match by Shortcode');
 
                     const submission = await prisma.submission.findFirst({
                         where: {
@@ -106,19 +110,29 @@ export async function POST(req: Request) {
                     });
 
                     if (submission) {
+                        let s3ThumbUrl = (submission as any).igThumbnailUrl;
+                        if (!s3ThumbUrl && rawThumb) {
+                            const { uploadFromUrl } = await import('../../../utils/s3');
+                            const key = `thumbnails/instagram/${submission.id}_${Date.now()}.jpg`;
+                            s3ThumbUrl = await uploadFromUrl(rawThumb, key) || (submission as any).igThumbnailUrl;
+                        }
+
                         await prisma.submission.update({
                             where: { id: submission.id },
                             data: {
                                 igViews: views,
                                 igLikes: likes,
-                                igComments: comments
-                            }
+                                igComments: comments,
+                                igThumbnailUrl: s3ThumbUrl
+                            } as any
                         });
-                        logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated Instagram stats');
+                        logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated Instagram stats & thumbnail');
                     }
                 }
             }
         }
+
+
 
         return NextResponse.json({ success: true });
 

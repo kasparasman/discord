@@ -42,17 +42,18 @@ async function runTest() {
         console.error('❌ TikTok Test Failed:', e.message);
     }
 
-    // 2. Instagram Test (shu8hvrXbJbY3Eb9W)
-    console.log('\n--- 📸 Instagram Actor Test ---');
+    // 2. Instagram Reels Actor Test (xMc5Ga1oCONPmWJIa)
+    console.log('\n--- 📸 Instagram Reels Actor Test ---');
     try {
-        const igRun = await client.actor("shu8hvrXbJbY3Eb9W").call({
-            "directUrls": [testUrls[1]],
-            "resultsType": "posts",
+        const igRun = await client.actor("xMc5Ga1oCONPmWJIa").call({
+            "username": [testUrls[1]],
             "resultsLimit": 1,
-            "searchType": "hashtag",
-            "searchLimit": 1,
-            "addParentData": false
+            "skipPinnedPosts": false,
+            "includeSharesCount": true,
+            "includeTranscript": false,
+            "includeDownloadedVideo": false
         });
+
 
 
 
@@ -61,13 +62,13 @@ async function runTest() {
             const item = igItems[0];
             console.log('✅ Instagram Data Received');
             console.log('📍 item.url:', item.url);
-            console.log('📍 item.directUrl:', item.directUrl);
             console.log('📍 videoPlayCount:', item.videoPlayCount);
-
+            console.log('📍 displayUrl (thumbnail):', item.displayUrl);
             console.log('📍 likesCount:', item.likesCount);
             console.log('📍 commentsCount:', item.commentsCount);
             console.log('📍 Keys available:', Object.keys(item).join(', '));
-        } else {
+        }
+        else {
             console.log('❌ Instagram: No data returned.');
         }
 

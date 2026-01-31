@@ -71,14 +71,20 @@ export async function POST(req: Request) {
                 const tiktokWebhookUrl = `${baseWebhookUrl}&platform=tiktok`;
                 await client.actor('GdWCkxBtKWOsKjdch').start({
                     postURLs: tiktokLinks,
+                    commentsPerPost: 0,
+                    excludePinnedPosts: false,
+                    maxFollowersPerProfile: 0,
+                    maxFollowingPerProfile: 0,
+                    maxRepliesPerComment: 0,
+                    proxyCountryCode: "None",
                     resultsPerPage: 100,
-                    profileScrapeSections: ["videos"],
-                    shouldDownloadVideos: false,
-                    shouldDownloadCovers: false,
-                    shouldDownloadSubtitles: false,
-                    shouldDownloadSlideshowImages: false,
+                    scrapeRelatedVideos: false,
                     shouldDownloadAvatars: false,
+                    shouldDownloadCovers: false,
                     shouldDownloadMusicCovers: false,
+                    shouldDownloadSlideshowImages: false,
+                    shouldDownloadSubtitles: false,
+                    shouldDownloadVideos: false
                 }, {
                     memory: 1024,
                     timeout: 300,
@@ -96,13 +102,13 @@ export async function POST(req: Request) {
             // Instagram Scrape
             if (instagramLinks.length > 0) {
                 const igWebhookUrl = `${baseWebhookUrl}&platform=instagram`;
-                await client.actor('shu8hvrXbJbY3Eb9W').start({
-                    "directUrls": instagramLinks,
-                    "resultsType": "posts",
-                    "resultsLimit": instagramLinks.length * 2,
-                    "searchType": "hashtag",
-                    "searchLimit": 1,
-                    "addParentData": false
+                await client.actor('xMc5Ga1oCONPmWJIa').start({
+                    "username": instagramLinks,
+                    "resultsLimit": Math.max(20, instagramLinks.length * 2),
+                    "skipPinnedPosts": false,
+                    "includeSharesCount": true,
+                    "includeTranscript": false,
+                    "includeDownloadedVideo": false
                 }, {
                     memory: 1024,
                     timeout: 300,
@@ -114,8 +120,9 @@ export async function POST(req: Request) {
                         },
                     ],
                 });
-                logger.info({ orderId }, '[Track API] Instagram actor started');
+                logger.info({ orderId }, '[Track API] Instagram Reels actor started');
             }
+
         }
 
 
