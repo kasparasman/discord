@@ -20,14 +20,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }
 
-        // Only track if there are submissions
+        // Only track if there are submissions - Normalize URLs to ensure stable matching keys
         const tiktokLinks = order.submissions
-            .map((s) => s.tiktokLink)
-            .filter((link): link is string => !!link && link.includes('tiktok.com'));
+            .filter((s) => s.tiktokLink && s.tiktokLink.includes('tiktok.com'))
+            .map((s) => s.tiktokLink.split('?')[0]); // Use clean URL as the key
 
         const instagramLinks = order.submissions
-            .map((s) => s.instagramLink)
-            .filter((link): link is string => !!link && link.includes('instagram.com'));
+            .filter((s) => s.instagramLink && s.instagramLink.includes('instagram.com'))
+            .map((s) => s.instagramLink.split('?')[0]); // Use clean URL as the key
 
         if (tiktokLinks.length === 0 && instagramLinks.length === 0) {
             logger.info({ orderId }, '[Track API] No links to scrape. Skipping cycle.');
@@ -117,6 +117,8 @@ export async function POST(req: Request) {
                 logger.info({ orderId }, '[Track API] Instagram actor started');
             }
         }
+
+
 
 
         // 3. SCHEDULE NEXT CALL VIA QSTASH

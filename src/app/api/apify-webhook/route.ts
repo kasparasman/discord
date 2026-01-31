@@ -52,17 +52,24 @@ export async function POST(req: Request) {
         // 4. Update Submissions
         for (const item of items) {
             if (platform === 'tiktok') {
-                const tiktokUrl = (item.webVideoUrl as string) || (item.url as string);
+                const tiktokUrl = (item.webVideoUrl as string) || (item.url as string) || (item.directUrl as string);
                 const views = (item.playCount as number) || 0;
                 const likes = (item.diggCount as number) || 0;
                 const shares = (item.shareCount as number) || 0;
                 const comments = (item.commentCount as number) || 0;
 
                 if (tiktokUrl) {
+                    // Normalize the scraper URL: strip params and trailing slash
+                    const cleanScraperUrl = tiktokUrl.split('?')[0].replace(/\/$/, '').toLowerCase();
+
+                    // Find by matching the clean URL
                     const submission = await prisma.submission.findFirst({
                         where: {
                             orderId: parseInt(orderId),
-                            tiktokLink: { contains: tiktokUrl.split('?')[0] }
+                            OR: [
+                                { tiktokLink: { contains: cleanScraperUrl } },
+                                { tiktokLink: { equals: tiktokUrl } }
+                            ]
                         }
                     });
 
@@ -80,17 +87,22 @@ export async function POST(req: Request) {
                     }
                 }
             } else if (platform === 'instagram') {
-                // IG fields can vary by actor, but commonly:
-                const igUrl = (item.url as string) || (item.inputUrl as string);
+                const igUrl = (item.url as string) || (item.directUrl as string);
                 const views = (item.videoPlayCount as number) || (item.playCount as number) || 0;
-                const likes = (item.likesCount as number) || 0;
+                const likes = (item.likesCount as number) || (item.displayLikesCount as number) || 0;
                 const comments = (item.commentsCount as number) || 0;
 
                 if (igUrl) {
+                    // Normalize the scraper URL: strip params and trailing slash
+                    const cleanScraperUrl = igUrl.split('?')[0].replace(/\/$/, '').toLowerCase();
+
                     const submission = await prisma.submission.findFirst({
                         where: {
                             orderId: parseInt(orderId),
-                            instagramLink: { contains: igUrl.split('?')[0] }
+                            OR: [
+                                { instagramLink: { contains: cleanScraperUrl } },
+                                { instagramLink: { equals: igUrl } }
+                            ]
                         }
                     });
 
@@ -108,7 +120,6 @@ export async function POST(req: Request) {
                 }
             }
         }
-
 
         return NextResponse.json({ success: true });
 
