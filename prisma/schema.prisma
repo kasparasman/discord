@@ -540,14 +540,26 @@ model Submission {
   userId          Int?       @map("user_id")
   platformVideoId String?    @map("platform_video_id")
   status          String     @default("PENDING_REVIEW") @db.VarChar(20)
-  initialViews    Int        @default(0) @map("initial_views")
-  final24hViews   Int        @default(0) @map("final_24h_views")
-  likes           Int        @default(0)
-  shares          Int        @default(0)
   submittedAt     DateTime   @default(now()) @map("submitted_at")
   reflection      String?
-  instagramLink   String     @map("instagram_link")
-  tiktokLink      String     @map("tiktok_link")
+
+  // -- The Inputs --
+  tiktokLink    String   @unique @map("tiktok_link") // The "Sprint" Video
+  instagramLink String   @unique @map("instagram_link") // The "Marathon" Video
+  
+  // -- TikTok Reactor (Velocity) --
+  tiktokViews   Int      @default(0) @map("tiktok_views")
+  tiktokLikes   Int      @default(0) @map("tiktok_likes")
+  tiktokShares  Int      @default(0) @map("tiktok_shares")
+  tiktokComments Int     @default(0) @map("tiktok_comments")
+  tiktokScore   Float    @default(0.0) @map("tiktok_score") // Computed "Virality Score"
+  
+  // -- Instagram Reactor (Value) --
+  igViews       Int      @default(0) @map("ig_views") // "Play Count"
+  igLikes       Int      @default(0) @map("ig_likes")
+  igComments    Int      @default(0) @map("ig_comments")
+  igScore       Float    @default(0.0) @map("ig_score") // Computed "Value Score"
+
   order           Order      @relation(fields: [orderId], references: [id])
   publisher       Publisher? @relation(fields: [userId], references: [id])
 

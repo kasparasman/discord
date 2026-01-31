@@ -104,6 +104,11 @@ export async function createOrderService(rawInput: string, productLink: string, 
                                         inline: true,
                                     },
                                     {
+                                        name: "📊 LIVE ANALYTICS",
+                                        value: `[View Performance](${process.env.IS_PRODUCTION === 'true' ? 'https://anthroposcity.com' : 'https://preview.anthroposcity.com'}/analytics?platform=instagram&orderId=${newOrder.id})`,
+                                        inline: true,
+                                    },
+                                    {
                                         name: "📝 ENROLLMENT CLOSES",
                                         value: `<t:${enrollmentUnix}:R>`,
                                         inline: true,

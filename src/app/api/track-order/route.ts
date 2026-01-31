@@ -25,8 +25,12 @@ export async function POST(req: Request) {
             .map((s) => s.tiktokLink)
             .filter((link): link is string => !!link && link.includes('tiktok.com'));
 
-        if (tiktokLinks.length === 0) {
-            logger.info({ orderId }, '[Track API] No TikTok links to scrape. Skipping cycle.');
+        const instagramLinks = order.submissions
+            .map((s) => s.instagramLink)
+            .filter((link): link is string => !!link && link.includes('instagram.com'));
+
+        if (tiktokLinks.length === 0 && instagramLinks.length === 0) {
+            logger.info({ orderId }, '[Track API] No links to scrape. Skipping cycle.');
             return NextResponse.json({ message: 'No links to scrape' });
         }
 
@@ -48,42 +52,69 @@ export async function POST(req: Request) {
 
         // 2. CALL APIFY USING SDK
         if (process.env.APIFY_TOKEN) {
-            logger.info({ orderId, count: newCount }, '[Track API] Launching Apify scrape via SDK');
+            logger.info({ orderId, count: newCount }, '[Track API] Launching scrapers');
 
             const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-
             const secret = process.env.APIFY_WEBHOOK_SECRET;
             if (!secret) {
                 logger.error('[Track API] APIFY_WEBHOOK_SECRET is not defined. Aborting run.');
                 throw new Error('APIFY_WEBHOOK_SECRET missing');
             }
 
-            const webhookUrl = `${process.env.APP_URL}/api/apify-webhook?orderId=${orderId}&secret=${secret}`;
+            const baseWebhookUrl = `${process.env.APP_URL}/api/apify-webhook?orderId=${orderId}&secret=${secret}`;
 
-            await client.actor('GdWCkxBtKWOsKjdch').start({
-                postURLs: tiktokLinks,
-                resultsPerPage: 1000,
-                profileScrapeSections: ["videos"],
-                shouldDownloadVideos: false,
-                shouldDownloadCovers: false,
-                shouldDownloadSubtitles: false,
-                shouldDownloadSlideshowImages: false,
-                shouldDownloadAvatars: false,
-                shouldDownloadMusicCovers: false,
-            }, {
-                memory: 1024,
-                timeout: 300,
-                webhooks: [
-                    {
-                        eventTypes: ['ACTOR.RUN.SUCCEEDED'],
-                        requestUrl: webhookUrl,
-                        idempotencyKey: `webhook-${orderId}-${newCount}`
-                    },
-                ],
-            });
+            // TikTok Scrape
+            if (tiktokLinks.length > 0) {
+                const tiktokWebhookUrl = `${baseWebhookUrl}&platform=tiktok`;
+                await client.actor('GdWCkxBtKWOsKjdch').start({
+                    postURLs: tiktokLinks,
+                    resultsPerPage: 100,
+                    profileScrapeSections: ["videos"],
+                    shouldDownloadVideos: false,
+                    shouldDownloadCovers: false,
+                    shouldDownloadSubtitles: false,
+                    shouldDownloadSlideshowImages: false,
+                    shouldDownloadAvatars: false,
+                    shouldDownloadMusicCovers: false,
+                }, {
+                    memory: 1024,
+                    timeout: 300,
+                    webhooks: [
+                        {
+                            eventTypes: ['ACTOR.RUN.SUCCEEDED'],
+                            requestUrl: tiktokWebhookUrl,
+                            idempotencyKey: `webhook-tt-${orderId}-${newCount}`
+                        },
+                    ],
+                });
+                logger.info({ orderId }, '[Track API] TikTok actor started');
+            }
 
-            logger.info({ orderId }, '[Track API] Apify actor started successfully');
+            // Instagram Scrape
+            if (instagramLinks.length > 0) {
+                const igWebhookUrl = `${baseWebhookUrl}&platform=instagram`;
+                await client.actor('shu8hvrXbJbY3Eb9W').start({
+                    "directUrls": instagramLinks,
+                    "resultsType": "posts",
+                    "resultsLimit": instagramLinks.length * 2,
+                    "searchType": "hashtag",
+                    "searchLimit": 1,
+                    "addParentData": false
+                }, {
+                    memory: 1024,
+                    timeout: 300,
+                    webhooks: [
+                        {
+                            eventTypes: ['ACTOR.RUN.SUCCEEDED'],
+                            requestUrl: igWebhookUrl,
+                            idempotencyKey: `webhook-ig-${orderId}-${newCount}`
+                        },
+                    ],
+                });
+                logger.info({ orderId }, '[Track API] Instagram actor started');
+            }
         }
+
 
         // 3. SCHEDULE NEXT CALL VIA QSTASH
         if (newCount < 10) {
