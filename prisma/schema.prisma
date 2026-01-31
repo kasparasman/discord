@@ -492,7 +492,6 @@ model Order {
   rawInput            String             @map("raw_input")
   briefContent        String?            @map("brief_content")
   productLink         String?            @map("product_link")
-  rewardAmount        Int?               @map("reward_amount")
   status              String             @default("OPEN") @db.VarChar(20)
   discordThreadId     String?            @map("discord_thread_id")
   createdAt           DateTime           @default(now()) @map("created_at")

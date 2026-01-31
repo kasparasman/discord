@@ -2,7 +2,7 @@ import { openai } from "../openai";
 import { prisma } from "../prisma";
 import { logger } from "../../utils/logger";
 
-export async function createOrderService(rawInput: string, productLink: string, reward: number) {
+export async function createOrderService(rawInput: string, productLink: string) {
     const isTest = process.env.TEST_MODE === 'true';
     logger.info({ rawInput: rawInput.slice(0, 50) + '...', isTest }, '[Order Service] Starting createOrderService');
 
@@ -29,7 +29,6 @@ export async function createOrderService(rawInput: string, productLink: string, 
             rawInput,
             briefContent: aiBrief || '',
             productLink,
-            rewardAmount: reward,
             status: "OPEN"
         }
     });
@@ -89,12 +88,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
                                 color: isTest ? 15548997 : 5763719,
                                 fields: [
                                     {
-                                        name: "💰 REWARD",
-                                        value: `**${reward} ACT**`,
-                                        inline: true,
-                                    },
-                                    {
-                                        name: "📦 ASSETS",
+                                        name: " ASSETS",
                                         value: `[Download Here](${productLink})`,
                                         inline: true,
                                     },

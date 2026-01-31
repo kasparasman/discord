@@ -8,15 +8,15 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         logger.info({ body }, '[Orders API] Request body parsed');
-        const { rawInput, productLink, reward } = body;
+        const { rawInput, productLink } = body;
 
-        if (!rawInput || productLink === undefined || reward === undefined) {
-            logger.warn({ rawInput, productLink, reward }, '[Orders API] Validation failed: missing fields');
-            return NextResponse.json({ error: "Missing required fields (rawInput, productLink, reward)" }, { status: 400 });
+        if (!rawInput || productLink === undefined) {
+            logger.warn({ rawInput, productLink }, '[Orders API] Validation failed: missing fields');
+            return NextResponse.json({ error: "Missing required fields (rawInput, productLink)" }, { status: 400 });
         }
 
-        logger.info({ reward }, '[Orders API] Creating new order');
-        const result = await createOrderService(rawInput, productLink, Number(reward));
+        logger.info({ rawInput, productLink }, '[Orders API] Creating new order');
+        const result = await createOrderService(rawInput, productLink);
 
         logger.info({ orderId: result.order.id }, '[Orders API] Order created successfully');
         return NextResponse.json(result, { status: 201 });
