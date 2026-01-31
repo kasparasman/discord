@@ -34,8 +34,11 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'No links to scrape' });
         }
 
-        if (order.scrapeCount >= 10) {
-            return NextResponse.json({ message: 'Tracking complete (10/10)' });
+        const isTest = process.env.TEST_MODE === 'true';
+        const maxScrapes = isTest ? 2 : 10;
+
+        if (order.scrapeCount >= maxScrapes) {
+            return NextResponse.json({ message: `Tracking complete (${order.scrapeCount}/${maxScrapes})` });
         }
 
         // 1. INCREMENT COUNT & UPDATE STATUS FIRST
@@ -117,8 +120,7 @@ export async function POST(req: Request) {
 
 
         // 3. SCHEDULE NEXT CALL VIA QSTASH
-        if (newCount < 10) {
-            const isTest = process.env.TEST_MODE === 'true';
+        if (newCount < maxScrapes) {
             let delay = "12h";
             if (isTest) {
                 delay = "1m";
@@ -139,15 +141,16 @@ export async function POST(req: Request) {
                     },
                     body: JSON.stringify({ orderId: orderId.toString() })
                 });
-                logger.info({ orderId, newCount, delay }, '[Track API] Next scrape scheduled');
+                logger.info({ orderId, newCount, delay, maxScrapes }, '[Track API] Next scrape scheduled');
             }
         } else {
-            logger.info({ orderId }, '[Track API] Tracking cycle finished (10/10)');
+            logger.info({ orderId, maxScrapes }, `[Track API] Tracking cycle finished (${newCount}/${maxScrapes})`);
             await prisma.order.update({
                 where: { id: parseInt(orderId) },
                 data: { isTracking: false }
             });
         }
+
 
         return NextResponse.json({ success: true, count: newCount });
 

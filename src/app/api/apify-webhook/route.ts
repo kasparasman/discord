@@ -74,9 +74,6 @@ export async function POST(req: Request) {
                                 tiktokLikes: likes,
                                 tiktokShares: shares,
                                 tiktokComments: comments,
-                                // Maintain legacy fields for compatibility if needed
-                                likes: likes,
-                                shares: shares
                             }
                         });
                         logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated TikTok stats');
