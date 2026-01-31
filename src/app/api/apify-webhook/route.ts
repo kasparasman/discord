@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from "../../../lib/prisma";
 import { logger } from '../../../utils/logger';
 import { ApifyClient } from 'apify-client';
+import { uploadFromUrl } from '../../../utils/s3';
+
 
 interface TikTokScrapeItem {
     webVideoUrl?: string;
@@ -73,9 +75,11 @@ export async function POST(req: Request) {
                     if (submission) {
                         let s3ThumbUrl = (submission as any).tiktokThumbnailUrl;
                         if (!s3ThumbUrl && rawThumb) {
-                            const { uploadFromUrl } = await import('../../../utils/s3');
                             const key = `thumbnails/tiktok/${submission.id}_${Date.now()}.jpg`;
+                            logger.info({ submissionId: submission.id, rawThumb }, '[Apify Webhook] Attempting TikTok thumbnail upload');
                             s3ThumbUrl = await uploadFromUrl(rawThumb, key) || (submission as any).tiktokThumbnailUrl;
+                        } else if (!rawThumb) {
+                            logger.warn({ submissionId: submission.id }, '[Apify Webhook] No TikTok thumbnail found in scraper output');
                         }
 
                         await prisma.submission.update({
@@ -88,8 +92,9 @@ export async function POST(req: Request) {
                                 tiktokThumbnailUrl: s3ThumbUrl
                             } as any
                         });
-                        logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated TikTok stats & thumbnail');
+                        logger.info({ submissionId: submission.id, platform, views, hasThumb: !!s3ThumbUrl }, '[Apify Webhook] Updated TikTok stats');
                     }
+
                 }
             } else if (platform === 'instagram') {
                 const igUrl = (item.url as string) || (item.directUrl as string);
@@ -112,9 +117,11 @@ export async function POST(req: Request) {
                     if (submission) {
                         let s3ThumbUrl = (submission as any).igThumbnailUrl;
                         if (!s3ThumbUrl && rawThumb) {
-                            const { uploadFromUrl } = await import('../../../utils/s3');
                             const key = `thumbnails/instagram/${submission.id}_${Date.now()}.jpg`;
+                            logger.info({ submissionId: submission.id, rawThumb }, '[Apify Webhook] Attempting Instagram thumbnail upload');
                             s3ThumbUrl = await uploadFromUrl(rawThumb, key) || (submission as any).igThumbnailUrl;
+                        } else if (!rawThumb) {
+                            logger.warn({ submissionId: submission.id }, '[Apify Webhook] No Instagram thumbnail found in scraper output');
                         }
 
                         await prisma.submission.update({
@@ -126,8 +133,9 @@ export async function POST(req: Request) {
                                 igThumbnailUrl: s3ThumbUrl
                             } as any
                         });
-                        logger.info({ submissionId: submission.id, platform, views }, '[Apify Webhook] Updated Instagram stats & thumbnail');
+                        logger.info({ submissionId: submission.id, platform, views, hasThumb: !!s3ThumbUrl }, '[Apify Webhook] Updated Instagram stats');
                     }
+
                 }
             }
         }

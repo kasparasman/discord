@@ -30,6 +30,9 @@ async function runTest() {
             const item = ttItems[0];
             console.log('✅ TikTok Data Received');
             console.log('📍 item.input value:', item.input);
+            console.log('📍 item.webVideoUrl:', item.webVideoUrl);
+            console.log('📍 videoMeta:', item.videoMeta ? 'Exists' : 'Missing');
+            if (item.videoMeta) console.log('📍 videoMeta.coverUrl:', item.videoMeta.coverUrl);
             console.log('📍 playCount:', item.playCount);
             console.log('📍 diggCount:', item.diggCount);
             console.log('📍 shareCount:', item.shareCount);
