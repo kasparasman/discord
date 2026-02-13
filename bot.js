@@ -310,7 +310,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                         console.log(`🚀 [Bot] First submission detected for Order #${orderId}. Launching Tracking Algorithm...`);
 
                         if (process.env.APP_URL) {
-                            const trackingUrl = `${process.env.APP_URL.replace(/\/$/, '')}/api/track-order`;
+                            const trackingUrl = `${process.env.APP_URL.replace(/\/$/, '')}/network/api/track-order`;
                             const response = await fetch(trackingUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },

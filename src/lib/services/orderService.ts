@@ -167,7 +167,7 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
         const enrollmentUnix = nowUnix + Math.floor(enrollmentTimeMs / 1000);
         const submissionUnix = nowUnix + Math.floor(submissionTimeMs / 1000);
 
-        const analyticsLink = `${process.env.IS_PRODUCTION === 'true' ? 'https://anthroposcity.com' : 'https://preview.anthroposcity.com'}/analytics?platform=instagram&orderId=${orderId}`;
+        const analyticsLink = `${process.env.IS_PRODUCTION === 'true' ? 'https://anthroposcity.com' : 'https://preview.anthroposcity.com'}/network/analytics?platform=instagram&orderId=${orderId}`;
 
         const embeds = parseDossierToEmbeds(
             briefContent,
@@ -213,7 +213,7 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
             // --- QSTASH SCHEDULING ---
             if (process.env.QSTASH_TOKEN && process.env.APP_URL) {
                 logger.info({ enrollmentDelay, submissionDelay }, '[Order Service] Scheduling mission phases via QStash');
-                const qstashUrl = `https://qstash.upstash.io/v2/publish/${process.env.APP_URL}/api/expire-enrollment`;
+                const qstashUrl = `https://qstash.upstash.io/v2/publish/${process.env.APP_URL}/network/api/expire-enrollment`;
 
                 // Phase 1: Close Enrollment
                 await fetch(qstashUrl, {
@@ -291,7 +291,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
 
         logger.info({ orderId: newOrder.id }, '[Order Service] Order created, kicking off CrewAI');
 
-        const crewWebhookUrl = `${process.env.APP_URL}/api/webhooks/crewai`;
+        const crewWebhookUrl = `${process.env.APP_URL}/network/api/webhooks/crewai`;
         const crewApiUrl = "https://order-570985dc-313b-4f68-9dbf-26ce60347a0d-c7770b85.crewai.com/kickoff";
 
         // --- BYPASS LOGIC FOR FAST TESTING ---
