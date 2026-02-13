@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// 1. Load ENVs in order of priority: .env.local (if exists) then .env
+// 1. Load ENVs in order of priority: .env.local (if exists) then .env/
 if (fs.existsSync(path.join(__dirname, '.env.local'))) {
     require('dotenv').config({ path: '.env.local' });
 }
