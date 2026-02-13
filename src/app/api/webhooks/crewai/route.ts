@@ -33,7 +33,6 @@ export async function POST(req: Request) {
         const updatedOrder = await prisma.order.update({
             where: { id: order.id },
             data: {
-                crewAiResult: result,
                 briefContent: result, // We use the result as the briefContent
                 status: "OPEN"
             }
