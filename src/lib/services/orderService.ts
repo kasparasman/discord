@@ -291,7 +291,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
 
         logger.info({ orderId: newOrder.id }, '[Order Service] Order created, kicking off CrewAI');
 
-        const crewwebhookUrl = `${process.env.APP_URL}/api/webhooks/crewai`;
+        const crewWebhookUrl = `${process.env.APP_URL}/api/webhooks/crewai`;
         const crewApiUrl = "https://order-570985dc-313b-4f68-9dbf-26ce60347a0d-c7770b85.crewai.com/kickoff";
 
         try {
@@ -307,7 +307,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
                         product_image_url: product.imageUrl,
                         expert_input: finalRawInput
                     },
-                    crewwebhookUrl
+                    crewWebhookUrl
                 })
             });
 
