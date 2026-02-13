@@ -294,6 +294,50 @@ export async function createOrderService(rawInput: string, productLink: string, 
         const crewWebhookUrl = `${process.env.APP_URL}/api/webhooks/crewai`;
         const crewApiUrl = "https://order-570985dc-313b-4f68-9dbf-26ce60347a0d-c7770b85.crewai.com/kickoff";
 
+        // --- BYPASS LOGIC FOR FAST TESTING ---
+        if (process.env.ENABLE_MOCK_CREWAI === 'true') {
+            logger.info({ orderId: newOrder.id }, '[Order Service] ⚡ BYPASS ENABLED: Skipping CrewAI and simulating result');
+
+            const mockKickoffId = `mock_${Date.now()}`;
+            const mockDossier = `
+# ANTHROPOS NETWORK DOSSIER: MOCK EXECUTION
+---
+## SUBJECT: FAST_TEST_BYPASS
+**STATUS:** SIMULATED
+**PURPOSE:** CHAIN_VERIFICATION
+
+This is a mock dossier generated via the bypass protocol to test the delivery chain without consuming computational credits.
+---
+### PART A: INTELLIGENCE
+The core signal is verified. This simulation confirms that the Discord formatting engine and thread creation logic are operational.
+---
+### PART B: EXECUTION
+1. Launch bypass.
+2. Verify delivery.
+3. Confirm status.
+            `.trim();
+
+            // Update order immediately as if webhook already happened
+            const updatedOrder = await prisma.order.update({
+                where: { id: newOrder.id },
+                data: {
+                    kickoffId: mockKickoffId,
+                    briefContent: mockDossier,
+                    status: "OPEN"
+                }
+            });
+
+            // Trigger Discord broadcast immediately
+            await broadcastOrderToDiscord({
+                orderId: updatedOrder.id,
+                briefContent: mockDossier,
+                productLink: updatedOrder.productLink || '',
+                rawInput: updatedOrder.rawInput
+            });
+
+            return { success: true, order: updatedOrder, kickoffId: mockKickoffId };
+        }
+
         try {
             const crewRes = await fetch(crewApiUrl, {
                 method: "POST",
