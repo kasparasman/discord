@@ -502,6 +502,7 @@ model Order {
   scrapeCount         Int                @default(0) @map("scrape_count")
   trackingStartedAt   DateTime?          @map("tracking_started_at")
   isTracking          Boolean            @default(false) @map("is_tracking")
+  kickoffId           String?            @map("kickoff_id")
   submissions         Submission[]
 
   @@map("orders")

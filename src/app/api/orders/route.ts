@@ -8,15 +8,19 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         logger.info({ body }, '[Orders API] Request body parsed');
-        const { rawInput, productLink } = body;
+        const { rawInput, productLink, productId, userInputMessage } = body;
 
-        if (!rawInput || productLink === undefined) {
-            logger.warn({ rawInput, productLink }, '[Orders API] Validation failed: missing fields');
-            return NextResponse.json({ error: "Missing required fields (rawInput, productLink)" }, { status: 400 });
+        // Allow either traditional rawInput/productLink OR the new productId/userInputMessage flow
+        const isValidTraditional = rawInput && productLink !== undefined;
+        const isValidNewFlow = productId !== undefined;
+
+        if (!isValidTraditional && !isValidNewFlow) {
+            logger.warn({ body }, '[Orders API] Validation failed: missing required fields');
+            return NextResponse.json({ error: "Missing required fields (rawInput/productLink or productId)" }, { status: 400 });
         }
 
-        logger.info({ rawInput, productLink }, '[Orders API] Creating new order');
-        const result = await createOrderService(rawInput, productLink);
+        logger.info({ productId, userInputMessage }, '[Orders API] Processing order request');
+        const result = await createOrderService(rawInput || '', productLink || '', productId, userInputMessage);
 
         logger.info({ orderId: result.order.id }, '[Orders API] Order created successfully');
         return NextResponse.json(result, { status: 201 });
