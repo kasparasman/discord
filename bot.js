@@ -77,7 +77,7 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 
             try {
                 await sql`
-                    INSERT INTO publishers (discord_id, username, is_active)
+                    INSERT INTO agents (discord_id, username, is_active)
                     VALUES (${newMember.id}, ${newMember.user.username}, ${isNowPublisher})
                     ON CONFLICT (discord_id)
                     DO UPDATE SET 
@@ -135,7 +135,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             // 2. Ensure the Publisher exists (Upsert)
             const [localPublisher] = await sql`
-                INSERT INTO publishers (discord_id, username, is_active)
+                INSERT INTO agents (discord_id, username, is_active)
                 VALUES (${interaction.user.id}, ${interaction.user.username}, true)
                 ON CONFLICT (discord_id) 
                 DO UPDATE SET username = EXCLUDED.username
@@ -146,7 +146,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             const [existing] = await sql`
                 SELECT id FROM order_participants 
                 WHERE order_id = ${parseInt(orderId)} 
-                AND publisher_id = ${localPublisher.id}
+                AND agent_id = ${localPublisher.id}
                 LIMIT 1;
             `;
 
@@ -159,7 +159,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             // 4. Add to the Order Pool (order_participants table)
             await sql`
-                INSERT INTO order_participants (order_id, publisher_id)
+                INSERT INTO order_participants (order_id, agent_id)
                 VALUES (${parseInt(orderId)}, ${localPublisher.id});
             `;
 
@@ -182,7 +182,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (action === 'submit') {
         try {
             // 1. Check if user is enrolled
-            const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
+            const [localPublisher] = await sql`SELECT id FROM agents WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
 
             if (!localPublisher) {
                 return interaction.reply({ content: "❌ You must accept the mission first.", flags: [MessageFlags.Ephemeral] });
@@ -190,7 +190,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             const [enrolled] = await sql`
                 SELECT id FROM order_participants 
-                WHERE order_id = ${parseInt(orderId)} AND publisher_id = ${localPublisher.id} LIMIT 1;
+                WHERE order_id = ${parseInt(orderId)} AND agent_id = ${localPublisher.id} LIMIT 1;
             `;
 
             if (!enrolled) {
@@ -289,7 +289,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             console.log(`📥 Processing dual-link submission for Order #${orderId} by ${interaction.user.username}`);
 
-            const [localPublisher] = await sql`SELECT id FROM publishers WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
+            const [localPublisher] = await sql`SELECT id FROM agents WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
 
             // 1. Save to DB
             await sql`

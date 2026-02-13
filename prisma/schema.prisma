@@ -18,6 +18,7 @@ model Product {
   sectorId    Int?
   investment  Int      @default(0)
   act         Int      @default(0)
+  product_id  String?  @unique
   sectors     Sector?  @relation(fields: [sectorId], references: [id], onUpdate: NoAction)
 
   @@index([sectorId])
@@ -498,78 +499,65 @@ model Order {
   enrollmentExpiresAt DateTime?          @map("enrollment_expires_at")
   submissionExpiresAt DateTime?          @map("submission_expires_at")
   workshopThreadId    String?            @map("workshop_thread_id")
-  participants        OrderParticipant[]
+  isTracking          Boolean            @default(false) @map("is_tracking")
   scrapeCount         Int                @default(0) @map("scrape_count")
   trackingStartedAt   DateTime?          @map("tracking_started_at")
-  isTracking          Boolean            @default(false) @map("is_tracking")
   kickoffId           String?            @map("kickoff_id")
+  participants        OrderParticipant[]
   submissions         Submission[]
 
   @@map("orders")
 }
 
 model OrderParticipant {
-  id          Int       @id @default(autoincrement())
-  orderId     Int       @map("order_id")
-  publisherId Int       @map("publisher_id")
-  acceptedAt  DateTime  @default(now()) @map("accepted_at")
-  order       Order     @relation(fields: [orderId], references: [id])
-  publisher   Publisher @relation(fields: [publisherId], references: [id])
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @map("order_id")
+  agent_id   Int
+  acceptedAt DateTime @default(now()) @map("accepted_at")
+  agents     agents   @relation(fields: [agent_id], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id])
 
-  @@unique([orderId, publisherId])
+  @@unique([orderId, agent_id])
   @@map("order_participants")
 }
 
-model Publisher {
-  id              Int                @id @default(autoincrement())
-  discordId       String             @unique @map("discord_id")
-  username        String?
-  walletAddress   String?            @map("wallet_address")
-  reputationScore Int                @default(0) @map("reputation_score")
-  isActive        Boolean            @default(true) @map("is_active")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  participations  OrderParticipant[]
-  submissions     Submission[]
-
-  @@map("publishers")
-}
-
 model Submission {
-  id              Int        @id @default(autoincrement())
-  orderId         Int        @map("order_id")
-  userId          Int?       @map("user_id")
-  platformVideoId String?    @map("platform_video_id")
-  status          String     @default("PENDING_REVIEW") @db.VarChar(20)
-  submittedAt     DateTime   @default(now()) @map("submitted_at")
-  reflection      String?
-
-  // -- The Inputs --
-  tiktokLink    String   @unique @map("tiktok_link") // The "Sprint" Video
-  instagramLink String   @unique @map("instagram_link") // The "Marathon" Video
-  
-  // -- TikTok Reactor (Velocity) --
-  tiktokViews   Int      @default(0) @map("tiktok_views")
-  tiktokLikes   Int      @default(0) @map("tiktok_likes")
-  tiktokShares  Int      @default(0) @map("tiktok_shares")
-  tiktokComments Int     @default(0) @map("tiktok_comments")
-  tiktokScore   Float    @default(0.0) @map("tiktok_score") // Computed "Virality Score"
-  
-  // -- Instagram Reactor (Value) --
-  igViews       Int      @default(0) @map("ig_views") // "Play Count"
-  igLikes       Int      @default(0) @map("ig_likes")
-  igComments    Int      @default(0) @map("ig_comments")
-  igScore       Float    @default(0.0) @map("ig_score") // Computed "Value Score"
-  
-  // -- Thumbnails (Persistent S3 Links) --
-  tiktokThumbnailUrl String? @map("tiktok_thumbnail_url")
-  igThumbnailUrl     String? @map("ig_thumbnail_url")
-
-
-  order           Order      @relation(fields: [orderId], references: [id])
-
-  publisher       Publisher? @relation(fields: [userId], references: [id])
+  id                 Int      @id @default(autoincrement())
+  orderId            Int      @map("order_id")
+  userId             Int?     @map("user_id")
+  platformVideoId    String?  @map("platform_video_id")
+  status             String   @default("PENDING_REVIEW") @db.VarChar(20)
+  submittedAt        DateTime @default(now()) @map("submitted_at")
+  reflection         String?
+  instagramLink      String   @unique @map("instagram_link")
+  tiktokLink         String   @unique @map("tiktok_link")
+  igComments         Int      @default(0) @map("ig_comments")
+  igLikes            Int      @default(0) @map("ig_likes")
+  igScore            Float    @default(0.0) @map("ig_score")
+  igViews            Int      @default(0) @map("ig_views")
+  tiktokComments     Int      @default(0) @map("tiktok_comments")
+  tiktokLikes        Int      @default(0) @map("tiktok_likes")
+  tiktokScore        Float    @default(0.0) @map("tiktok_score")
+  tiktokShares       Int      @default(0) @map("tiktok_shares")
+  tiktokViews        Int      @default(0) @map("tiktok_views")
+  igThumbnailUrl     String?  @map("ig_thumbnail_url")
+  tiktokThumbnailUrl String?  @map("tiktok_thumbnail_url")
+  order              Order    @relation(fields: [orderId], references: [id])
+  publisher          agents?  @relation(fields: [userId], references: [id])
 
   @@map("submissions")
+}
+
+model agents {
+  id                 Int                @id @default(autoincrement())
+  discord_id         String             @unique
+  username           String?
+  wallet_address     String?
+  reputation_score   Int                @default(0)
+  is_active          Boolean            @default(true)
+  created_at         DateTime           @default(now())
+  order_participants OrderParticipant[]
+  submissions        Submission[]
 }
 
 enum RegistrationSessionStatus {
