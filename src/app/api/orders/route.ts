@@ -20,7 +20,7 @@ export async function POST(req: Request) {
         }
 
         logger.info({ productId, userInputMessage }, '[Orders API] Processing order request');
-        const result = await createOrderService(rawInput || '', productLink || '', productId, userInputMessage);
+        const result = await createOrderService(rawInput || '', productLink || '', productId ? Number(productId) : undefined, userInputMessage);
 
         logger.info({ orderId: result.order.id }, '[Orders API] Order created successfully');
         return NextResponse.json(result, { status: 201 });

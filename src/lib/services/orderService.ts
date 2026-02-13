@@ -267,9 +267,10 @@ export async function createOrderService(rawInput: string, productLink: string, 
 
     if (productId) {
         // --- NEW FLOW: CrewAI Integration ---
-        logger.info({ productId }, '[Order Service] Fetching product from DB');
+        const pId = Number(productId);
+        logger.info({ productId: pId }, '[Order Service] Fetching product from DB');
         const product = await prisma.product.findUnique({
-            where: { id: productId }
+            where: { id: pId }
         });
 
         if (!product) {
