@@ -310,7 +310,7 @@ export async function createOrderService(rawInput: string, productLink: string, 
         logger.info({ orderId: newOrder.id }, '[Order Service] Order created, kicking off CrewAI');
 
         const crewWebhookUrl = `${process.env.APP_URL}/network/api/webhooks/crewai`;
-        const crewApiUrl = "https://order-570985dc-313b-4f68-9dbf-26ce60347a0d-c7770b85.crewai.com/kickoff";
+        const crewApiUrl = "https://anthropos-order-8181b89e-a66c-4019-9ae3-472-bdb8118f.crewai.com/kickoff";
 
         // --- BYPASS LOGIC FOR FAST TESTING ---
         if (process.env.ENABLE_MOCK_CREWAI === 'true') {
