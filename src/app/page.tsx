@@ -10,7 +10,7 @@ export default function Home() {
                     This repository hosts both the Discord Bot (WebSocket) and the Next.js API.
                 </p>
                 <div className={styles.ctas}>
-                    <a className={styles.primary} href="/network/api/interactions">
+                    <a className={styles.primary} href="/api/interactions">
                         Interactions Status
                     </a>
                 </div>

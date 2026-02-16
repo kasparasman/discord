@@ -34,9 +34,8 @@ function parseDossierToEmbeds(
         { name: "📊 ANALYTICS", value: `[View Signal](${analyticsLink})`, inline: true },
     ];
 
-    const isDossier = /ANTHROPOS|DOSSIER|NETWORK|PROTOCOL/i.test(text);
+    const isDossier = /ANTHROPOS|DOSSIER|NETWORK|PROTOCOL|FIELD MANUAL/i.test(text);
 
-    // If it doesn't look like a structured dossier at all, use standard layout
     if (!isDossier) {
         return [{
             title: isTest ? "🧪 TEST MISSION BRIEFING" : "📄 MISSION BRIEFING",
@@ -52,11 +51,14 @@ function parseDossierToEmbeds(
         }];
     }
 
-    // RESILIENT SPLITTING
-    // First try horizontal rules, then double newlines with headers
-    let sections = text.split(/---/);
+    // SPLIT BY H2 HEADERS (Resilient to Section numbers/titles)
+    let sections = text.split(/(?=^#{2} )/m);
+
+    // If splitting by ## failed (maybe only rules were used), fallback to rules or sections
     if (sections.length <= 1) {
-        // Fallback split: Find sections starting with ## or ###
+        sections = text.split(/---/);
+    }
+    if (sections.length <= 1) {
         sections = text.split(/(?=^#{2,3} )/m);
     }
 
@@ -69,23 +71,40 @@ function parseDossierToEmbeds(
         let title = "";
         let body = content;
 
-        // Try to extract title from markdown headers
-        const headerMatch = content.match(/^(?:#+)\s*([^\n]+)/m);
+        // Extract Title from ## or ###
+        const headerMatch = content.match(/^(?:#{2,3})\s*([^\n]+)/m);
         if (headerMatch) {
             title = headerMatch[1].trim();
             body = content.replace(headerMatch[0], "").trim();
-        } else {
-            // Try to extract first bolded line as title
-            const boldMatch = content.match(/^\*\*([^*]+)\*\*/);
-            if (boldMatch) {
-                title = boldMatch[1].trim();
-                body = content.replace(boldMatch[0], "").trim();
-            }
         }
 
-        // Subject Extraction for the very first embed
+        // --- SECTION SPECIFIC LOGIC ---
+
+        // 1. CALLOUT ENHANCEMENT (Mechanism, Pivot, Energy)
+        // Convert **Label:** to something more prominent
+        body = body.replace(/\*\*(The Mechanism|The Pivot|The Energy|The Belief Install):\*\*/gi, (match) => `💡 **${match.toUpperCase()}**`);
+
+        // 2. SECTION 3: SCRIPT SKELETON (VO & Visual Extraction)
+        if (title.toUpperCase().includes("SCRIPT SKELETON") || title.includes("3.")) {
+            body = body.replace(/^\*\s*\*\*Visual:\*\*/gm, "👁️ **VISUAL:**");
+            body = body.replace(/^\*\s*\*\*VO:\*\*/gm, "🎙️ **VO:**");
+        }
+
+        // 3. SECTION 4: LAWS OF CONVERSION (Law/Why Mapping)
+        if (title.toUpperCase().includes("LAWS OF CONVERSION") || title.includes("4.")) {
+            // Find patterns like: * Law Name: Description + The WHY: Explanation
+            body = body.replace(/^\*\s*\*\*([^*]+)\*\*/gm, "⚖️ **$1**");
+            body = body.replace(/The WHY:/gi, "🧠 **THE WHY:**");
+        }
+
+        // 4. SECTION 5: CREATIVE AUTONOMY
+        if (title.toUpperCase().includes("AUTONOMY") || title.includes("5.")) {
+            body = body.replace(/^\*/gm, "📍");
+        }
+
+        // Subject Extraction for the first embed
         if (idx === 0) {
-            const subjectMatch = text.match(/(?:SUBJECT|PRODUCT):\s*([^\n]+)/i);
+            const subjectMatch = text.match(/(?:SUBJECT|PRODUCT|FIELD MANUAL):\s*([^\n]+)/i);
             const subject = subjectMatch ? subjectMatch[1].trim() : (title || "CLASSIFIED");
 
             embeds.push({
@@ -103,9 +122,7 @@ function parseDossierToEmbeds(
         }
     });
 
-    // Cleanup and add deadlines to the final embed
     if (embeds.length === 0) {
-        // Final fallback if everything failed
         embeds.push({ title: `ORDER #${orderId}`, description: text.slice(0, 4000), color: 0x003366, fields: assetFields });
     }
 
@@ -120,6 +137,7 @@ function parseDossierToEmbeds(
 
     return embeds.slice(0, 10);
 }
+
 
 export async function broadcastOrderToDiscord({ orderId, briefContent, productLink, rawInput }: DiscordBroadcastOptions) {
     const isTest = process.env.TEST_MODE === 'true';

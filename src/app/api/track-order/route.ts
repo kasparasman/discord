@@ -64,7 +64,7 @@ export async function POST(req: Request) {
                 throw new Error('APIFY_WEBHOOK_SECRET missing');
             }
 
-            const baseWebhookUrl = `${process.env.APP_URL}/network/api/apify-webhook?orderId=${orderId}&secret=${secret}`;
+            const baseWebhookUrl = `${process.env.APP_URL}/api/apify-webhook?orderId=${orderId}&secret=${secret}`;
 
             // TikTok Scrape
             if (tiktokLinks.length > 0) {
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
             }
 
             if (process.env.QSTASH_TOKEN && process.env.APP_URL) {
-                const qstashUrl = `https://qstash.upstash.io/v2/publish/${process.env.APP_URL}/network/api/track-order`;
+                const qstashUrl = `https://qstash.upstash.io/v2/publish/${process.env.APP_URL}/api/track-order`;
                 await fetch(qstashUrl, {
                     method: 'POST',
                     headers: {
