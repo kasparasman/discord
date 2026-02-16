@@ -29,7 +29,6 @@ function parseDossierToEmbeds(
     isTest: boolean
 ): DiscordEmbed[] {
     const assetFields = [
-        { name: "🔗 ASSETS", value: `[Download Here](${productLink})`, inline: true },
         { name: "🏗️ WORKSHOP", value: `<#${WORKSHOP_CHANNEL_ID}>`, inline: true },
         { name: "📊 ANALYTICS", value: `[View Signal](${analyticsLink})`, inline: true },
     ];
