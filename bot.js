@@ -39,8 +39,8 @@ const client = new Client({
     ]
 });
 
-// Configure the roles that trigger a "Publisher" sync
-const PUBLISHER_ROLE_NAME = 'Publisher'; // Change this if your role name is different
+// Configure the roles that trigger a "Ambassador" sync
+const AMBASSADOR_ROLE_NAME = 'Ambassadors'; // Changed from 'Publisher' to 'Ambassadors'
 
 client.once(Events.ClientReady, (readyClient) => {
     console.log(`✅ Logged in as ${readyClient.user.tag}`);
@@ -62,23 +62,23 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 
         added.forEach(role => {
             console.log(`   ➕ ADDED:   ${role.name} (${role.id})`);
-            if (role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase()) shouldSync = true;
+            if (role.name.toLowerCase() === AMBASSADOR_ROLE_NAME.toLowerCase()) shouldSync = true;
         });
 
         removed.forEach(role => {
             console.log(`   ➖ REMOVED: ${role.name} (${role.id})`);
-            if (role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase()) shouldSync = true;
+            if (role.name.toLowerCase() === AMBASSADOR_ROLE_NAME.toLowerCase()) shouldSync = true;
         });
 
         if (shouldSync) {
-            const isNowPublisher = newMember.roles.cache.some(role => role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase());
+            const isNowAmbassador = newMember.roles.cache.some(role => role.name.toLowerCase() === AMBASSADOR_ROLE_NAME.toLowerCase());
 
-            console.log(`🚀 Syncing ${newMember.user.username} to DB (Is Publisher: ${isNowPublisher})`);
+            console.log(`🚀 Syncing ${newMember.user.username} to DB (Is Ambassador: ${isNowAmbassador})`);
 
             try {
                 await sql`
                     INSERT INTO agents (discord_id, username, is_active)
-                    VALUES (${newMember.id}, ${newMember.user.username}, ${isNowPublisher})
+                    VALUES (${newMember.id}, ${newMember.user.username}, ${isNowAmbassador})
                     ON CONFLICT (discord_id)
                     DO UPDATE SET 
                         username = EXCLUDED.username,
@@ -100,11 +100,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (type !== 'order') return;
 
     const member = interaction.member;
-    const isPublisher = member.roles.cache.some(role => role.name.toLowerCase() === PUBLISHER_ROLE_NAME.toLowerCase());
+    const isAmbassador = member.roles.cache.some(role => role.name.toLowerCase() === AMBASSADOR_ROLE_NAME.toLowerCase());
 
-    if (!isPublisher) {
+    if (!isAmbassador) {
         return interaction.reply({
-            content: `❌ Only users with the **${PUBLISHER_ROLE_NAME}** role can accept missions.`,
+            content: `❌ Only users with the **${AMBASSADOR_ROLE_NAME}** role can accept missions.`,
             flags: [MessageFlags.Ephemeral]
         });
     }
@@ -133,8 +133,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 });
             }
 
-            // 2. Ensure the Publisher exists (Upsert)
-            const [localPublisher] = await sql`
+            // 2. Ensure the Ambassador exists (Upsert)
+            const [localAmbassador] = await sql`
                 INSERT INTO agents (discord_id, username, is_active)
                 VALUES (${interaction.user.id}, ${interaction.user.username}, true)
                 ON CONFLICT (discord_id) 
@@ -146,7 +146,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             const [existing] = await sql`
                 SELECT id FROM order_participants 
                 WHERE order_id = ${parseInt(orderId)} 
-                AND agent_id = ${localPublisher.id}
+                AND agent_id = ${localAmbassador.id}
                 LIMIT 1;
             `;
 
@@ -160,7 +160,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             // 4. Add to the Order Pool (order_participants table)
             await sql`
                 INSERT INTO order_participants (order_id, agent_id)
-                VALUES (${parseInt(orderId)}, ${localPublisher.id});
+                VALUES (${parseInt(orderId)}, ${localAmbassador.id});
             `;
 
             // 5. Simple confirmation
@@ -182,15 +182,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (action === 'submit') {
         try {
             // 1. Check if user is enrolled
-            const [localPublisher] = await sql`SELECT id FROM agents WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
+            const [localAmbassador] = await sql`SELECT id FROM agents WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
 
-            if (!localPublisher) {
+            if (!localAmbassador) {
                 return interaction.reply({ content: "❌ You must accept the mission first.", flags: [MessageFlags.Ephemeral] });
             }
 
             const [enrolled] = await sql`
                 SELECT id FROM order_participants 
-                WHERE order_id = ${parseInt(orderId)} AND agent_id = ${localPublisher.id} LIMIT 1;
+                WHERE order_id = ${parseInt(orderId)} AND agent_id = ${localAmbassador.id} LIMIT 1;
             `;
 
             if (!enrolled) {
@@ -210,7 +210,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             // 3. Check for Duplicate Submission
             const [submitted] = await sql`
                 SELECT id FROM submissions 
-                WHERE order_id = ${parseInt(orderId)} AND user_id = ${localPublisher.id} LIMIT 1;
+                WHERE order_id = ${parseInt(orderId)} AND user_id = ${localAmbassador.id} LIMIT 1;
             `;
 
             if (submitted) {
@@ -289,12 +289,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             console.log(`📥 Processing dual-link submission for Order #${orderId} by ${interaction.user.username}`);
 
-            const [localPublisher] = await sql`SELECT id FROM agents WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
+            const [localAmbassador] = await sql`SELECT id FROM agents WHERE discord_id = ${interaction.user.id} LIMIT 1;`;
 
             // 1. Save to DB
             await sql`
                 INSERT INTO submissions (order_id, user_id, tiktok_link, instagram_link, reflection, status)
-                VALUES (${parseInt(orderId)}, ${localPublisher.id}, ${tiktokUrl}, ${instagramUrl}, ${reflection}, 'PENDING_REVIEW');
+                VALUES (${parseInt(orderId)}, ${localAmbassador.id}, ${tiktokUrl}, ${instagramUrl}, ${reflection}, 'PENDING_REVIEW');
             `;
 
             // 2. CHECK IF TRACKING SHOULD START (Non-blocking)
