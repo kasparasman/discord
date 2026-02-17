@@ -8,15 +8,15 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         logger.info({ body }, '[Orders API] Request body parsed');
-        const { productId, rawInput } = body;
+        const { productId, rawInput, persona } = body;
 
         if (productId === undefined || !rawInput) {
             logger.warn({ body }, '[Orders API] Validation failed: missing productId or rawInput');
             return NextResponse.json({ error: "Missing required fields: productId and rawInput" }, { status: 400 });
         }
 
-        logger.info({ productId, rawInput }, '[Orders API] Processing order request');
-        const result = await createOrderService(Number(productId), rawInput);
+        logger.info({ productId, rawInput, persona }, '[Orders API] Processing order request');
+        const result = await createOrderService(Number(productId), rawInput, persona);
 
         logger.info({ orderId: result.order.id }, '[Orders API] Order created successfully');
         return NextResponse.json(result, { status: 201 });

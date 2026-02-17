@@ -503,6 +503,8 @@ model Order {
   scrapeCount         Int                @default(0) @map("scrape_count")
   trackingStartedAt   DateTime?          @map("tracking_started_at")
   kickoffId           String?            @map("kickoff_id")
+  personaName         String?            @map("persona_name")
+  personaDescription  String?            @map("persona_description")
   participants        OrderParticipant[]
   submissions         Submission[]
 

@@ -272,7 +272,7 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
     }
 }
 
-export async function createOrderService(productId: number, rawInput: string) {
+export async function createOrderService(productId: number, rawInput: string, persona?: { name: string, description: string }) {
     const isTest = process.env.TEST_MODE === 'true';
     logger.info({ isTest, productId }, '[Order Service] Starting createOrderService');
 
@@ -303,7 +303,9 @@ export async function createOrderService(productId: number, rawInput: string) {
         data: {
             rawInput: finalRawInput,
             productLink: finalProductLink,
-            status: "PENDING_CREWAI"
+            status: "PENDING_CREWAI",
+            personaName: persona?.name,
+            personaDescription: persona?.description
         }
     });
 
@@ -341,7 +343,9 @@ The core signal is verified. This simulation confirms that the Discord formattin
             data: {
                 kickoffId: mockKickoffId,
                 briefContent: mockDossier,
-                status: "OPEN"
+                status: "OPEN",
+                personaName: persona?.name,
+                personaDescription: persona?.description
             }
         });
 
@@ -367,7 +371,9 @@ The core signal is verified. This simulation confirms that the Discord formattin
                 inputs: {
                     amazon_url: product.link,
                     product_image_url: product.imageUrl,
-                    expert_input: finalRawInput
+                    expert_input: finalRawInput,
+                    persona_name: persona?.name,
+                    persona_description: persona?.description
                 },
                 crewWebhookUrl
             })
