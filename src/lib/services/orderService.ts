@@ -32,7 +32,7 @@ function parseDossierToEmbeds(
         { name: "📊 ANALYTICS", value: `[View Signal](${analyticsLink})`, inline: true },
     ];
 
-    const isDossier = /ANTHROPOS|DOSSIER|NETWORK|PROTOCOL|FIELD MANUAL/i.test(text);
+    const isDossier = /ANTHROPOS|DOSSIER|NETWORK|PROTOCOL|FIELD MANUAL|SECTION/i.test(text) || (text.match(/^#{2} /m) || []).length > 1;
 
     if (!isDossier) {
         return [{
@@ -50,7 +50,7 @@ function parseDossierToEmbeds(
     }
 
     // SPLIT BY H2 HEADERS (Resilient to Section numbers/titles)
-    let sections = text.split(/(?=^#{2} )/m);
+    let sections = text.split(/(?=^#{2} )/gm);
 
     // If splitting by ## failed (maybe only rules were used), fallback to rules or sections
     if (sections.length <= 1) {
@@ -107,7 +107,7 @@ function parseDossierToEmbeds(
 
             embeds.push({
                 title: `📂 DOSSIER: ORDER #${orderId}`,
-                description: `**SUBJECT: ${subject}**\n\n${body.slice(0, 2000)}`,
+                description: `**SUBJECT: ${subject}**\n\n${body.slice(0, 4000)}`,
                 color: 0x003366,
                 fields: assetFields
             });
