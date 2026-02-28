@@ -55,20 +55,26 @@ export async function POST(req: Request) {
         for (const item of items) {
             if (platform === 'tiktok') {
                 const tiktokUrl = (item.webVideoUrl as string) || (item.url as string) || (item.directUrl as string);
+                const submittedVideoUrl = item.submittedVideoUrl as string | undefined;
                 const views = (item.playCount as number) || 0;
                 const likes = (item.diggCount as number) || 0;
                 const shares = (item.shareCount as number) || 0;
                 const comments = (item.commentCount as number) || 0;
                 const rawThumb = (item.videoMeta as any)?.coverUrl;
 
-                if (tiktokUrl) {
-                    const ttIdMatch = tiktokUrl.match(/\/video\/(\d+)/);
+                if (tiktokUrl || submittedVideoUrl) {
+                    const ttIdMatch = tiktokUrl?.match(/\/video\/(\d+)/);
                     const ttId = ttIdMatch ? ttIdMatch[1] : null;
+
+                    let whereOr: any[] = [];
+                    if (ttId) whereOr.push({ tiktokLink: { contains: ttId } });
+                    if (submittedVideoUrl) whereOr.push({ tiktokLink: { equals: submittedVideoUrl } });
+                    if (tiktokUrl) whereOr.push({ tiktokLink: { contains: tiktokUrl.split('?')[0] } });
 
                     const submission = await prisma.submission.findFirst({
                         where: {
                             orderId: parseInt(orderId),
-                            tiktokLink: ttId ? { contains: ttId } : { contains: tiktokUrl.split('?')[0] }
+                            OR: whereOr.length > 0 ? whereOr : undefined
                         }
                     });
 
@@ -93,24 +99,31 @@ export async function POST(req: Request) {
                             } as any
                         });
                         logger.info({ submissionId: submission.id, platform, views, hasThumb: !!s3ThumbUrl }, '[Apify Webhook] Updated TikTok stats');
+                    } else {
+                        logger.warn({ orderId, platform, tiktokUrl, submittedVideoUrl }, '[Apify Webhook] Submission not found in DB');
                     }
-
                 }
             } else if (platform === 'instagram') {
                 const igUrl = (item.url as string) || (item.directUrl as string);
+                const submittedVideoUrl = item.submittedVideoUrl as string | undefined;
                 const views = (item.videoPlayCount as number) || (item.playCount as number) || 0;
                 const likes = (item.likesCount as number) || (item.displayLikesCount as number) || 0;
                 const comments = (item.commentsCount as number) || 0;
                 const rawThumb = (item.displayUrl as string);
 
-                if (igUrl) {
-                    const igMatch = igUrl.match(/\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
+                if (igUrl || submittedVideoUrl) {
+                    const igMatch = igUrl?.match(/\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
                     const shortcode = igMatch ? igMatch[1] : null;
+
+                    let whereOr: any[] = [];
+                    if (shortcode) whereOr.push({ instagramLink: { contains: shortcode } });
+                    if (submittedVideoUrl) whereOr.push({ instagramLink: { equals: submittedVideoUrl } });
+                    if (igUrl) whereOr.push({ instagramLink: { contains: igUrl.split('?')[0] } });
 
                     const submission = await prisma.submission.findFirst({
                         where: {
                             orderId: parseInt(orderId),
-                            instagramLink: shortcode ? { contains: shortcode } : { contains: igUrl.split('?')[0] }
+                            OR: whereOr.length > 0 ? whereOr : undefined
                         }
                     });
 
@@ -134,8 +147,9 @@ export async function POST(req: Request) {
                             } as any
                         });
                         logger.info({ submissionId: submission.id, platform, views, hasThumb: !!s3ThumbUrl }, '[Apify Webhook] Updated Instagram stats');
+                    } else {
+                        logger.warn({ orderId, platform, igUrl, submittedVideoUrl }, '[Apify Webhook] Submission not found in DB');
                     }
-
                 }
             }
         }
