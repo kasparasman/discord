@@ -272,6 +272,8 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
     }
 }
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function createOrderService(productId: number, rawInput: string, persona?: { name: string, description: string }) {
     const isTest = process.env.TEST_MODE === 'true';
     logger.info({ isTest, productId }, '[Order Service] Starting createOrderService');
@@ -360,29 +362,71 @@ The core signal is verified. This simulation confirms that the Discord formattin
         return { success: true, order: updatedOrder, kickoffId: mockKickoffId };
     }
 
-    try {
-        const crewRes = await fetch(crewApiUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${process.env.CREW_AI_TOKEN}`
-            },
-            body: JSON.stringify({
-                inputs: {
-                    amazon_url: product.link,
-                    product_image_url: product.imageUrl,
-                    expert_input: finalRawInput,
-                    persona_name: persona?.name,
-                    persona_description: persona?.description
-                },
-                crewWebhookUrl
-            })
-        });
+    let crewRes: Response | null = null;
+    let lastError = '';
+    let success = false;
 
-        if (!crewRes.ok) {
+    try {
+        // NOTE: On Vercel, the max execution time is limited (10s Hobby, 60s+ Pro).
+        // Since CrewAI "starting up" errors can take ~60s to return, multiple retries
+        // might exceed the function's duration. We'll attempt up to 3 total attempts
+        // with shorter wait times.
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            logger.info({ attempt, orderId: newOrder.id }, '[Order Service] Attempting CrewAI kickoff');
+
+            crewRes = await fetch(crewApiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${process.env.CREW_AI_TOKEN}`
+                },
+                body: JSON.stringify({
+                    inputs: {
+                        amazon_url: product.link,
+                        product_image_url: product.imageUrl,
+                        expert_input: finalRawInput,
+                        persona_name: persona?.name,
+                        persona_description: persona?.description
+                    },
+                    crewWebhookUrl
+                })
+            });
+
+            if (crewRes.ok) {
+                success = true;
+                break;
+            }
+
             const errorText = await crewRes.text();
-            logger.error({ errorText }, '[Order Service] CrewAI kickoff failed');
-            throw new Error(`CrewAI kickoff failed: ${errorText}`);
+            lastError = errorText;
+
+            // Robust check for "starting up" error (handles both raw text and JSON wrapped in detail)
+            let isStartingUp = errorText.toLowerCase().includes("service is starting up");
+            try {
+                const errorJson = JSON.parse(errorText);
+                if (errorJson.detail?.toLowerCase().includes("service is starting up")) {
+                    isStartingUp = true;
+                }
+            } catch (e) {
+                // Not JSON, that's fine
+            }
+
+            if (isStartingUp && attempt < 3) {
+                // CrewAI says "try again in 30s", but we'll try sooner (5s) to avoid timing out Vercel too hard
+                // While still giving it a small window to finish booting.
+                const waitTime = 5000;
+                logger.info({ attempt, orderId: newOrder.id, waitTime }, '[Order Service] CrewAI is starting up. Retrying...');
+                await delay(waitTime);
+                continue;
+            } else {
+                // Not a retryable error or max retries reached
+                logger.error({ attempt, errorText }, '[Order Service] CrewAI kickoff failed');
+                throw new Error(`CrewAI kickoff failed after ${attempt} attempts: ${errorText}`);
+            }
+        }
+
+        if (!success || !crewRes) {
+            throw new Error(`CrewAI failed to respond successfully. Last error: ${lastError}`);
         }
 
         const crewData = await crewRes.json();
