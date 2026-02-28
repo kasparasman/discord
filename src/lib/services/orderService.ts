@@ -124,17 +124,20 @@ function parseDossierToEmbeds(
         embeds.push({ title: `ORDER #${orderId}`, description: text.slice(0, 4000), color: 0x003366, fields: assetFields });
     }
 
-    const lastEmbedIdx = Math.min(embeds.length - 1, 9);
-    const lastEmbed = embeds[lastEmbedIdx];
-    lastEmbed.fields = (lastEmbed.fields || []).concat([
-        { name: "📝 ENROLLMENT", value: `<t:${enrollmentUnix}:R>`, inline: true },
-        { name: "🎬 DEADLINE", value: `<t:${submissionUnix}:R>`, inline: true }
-    ]);
-    lastEmbed.footer = { text: isTest ? "🧪 TEST PROTOCOL" : "AUTHENTICATED BY ANTHROPOS NETWORK" };
-    lastEmbed.timestamp = new Date().toISOString();
-
-    return embeds.slice(0, 10);
+    return embeds;
 }
+
+function calculateEmbedSize(embed: DiscordEmbed): number {
+    let size = (embed.title?.length || 0) + (embed.description?.length || 0);
+    if (embed.fields) {
+        for (const field of embed.fields) {
+            size += field.name.length + field.value.length;
+        }
+    }
+    size += (embed.footer?.text?.length || 0);
+    return size;
+}
+
 
 
 export async function broadcastOrderToDiscord({ orderId, briefContent, productLink, rawInput }: DiscordBroadcastOptions) {
@@ -185,7 +188,7 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
 
         const analyticsLink = `${process.env.IS_PRODUCTION === 'true' ? 'https://anthroposcity.com' : 'https://preview.anthroposcity.com'}/network/analytics?platform=instagram&orderId=${orderId}`;
 
-        const embeds = parseDossierToEmbeds(
+        const allEmbeds = parseDossierToEmbeds(
             briefContent,
             orderId,
             productLink,
@@ -195,6 +198,34 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
             WORKSHOP_CHANNEL_ID,
             isTest
         );
+
+        // Batch embeds to respect Discord's 6000-character-per-message limit
+        const batches: DiscordEmbed[][] = [[]];
+        let currentBatchSize = 0;
+
+        for (const embed of allEmbeds) {
+            const embedSize = calculateEmbedSize(embed);
+            const isTooBig = currentBatchSize + embedSize > 5500;
+            const tooManyEmbeds = batches[batches.length - 1].length >= 10;
+
+            if ((isTooBig || tooManyEmbeds) && batches[batches.length - 1].length > 0) {
+                batches.push([embed]);
+                currentBatchSize = embedSize;
+            } else {
+                batches[batches.length - 1].push(embed);
+                currentBatchSize += embedSize;
+            }
+        }
+
+        // Attach deadlines and footer to the last embed of the FIRST message
+        const firstBatch = batches[0];
+        const lastInFirstBatch = firstBatch[firstBatch.length - 1];
+        lastInFirstBatch.fields = (lastInFirstBatch.fields || []).concat([
+            { name: "📝 ENROLLMENT", value: `<t:${enrollmentUnix}:R>`, inline: true },
+            { name: "🎬 DEADLINE", value: `<t:${submissionUnix}:R>`, inline: true }
+        ]);
+        lastInFirstBatch.footer = { text: isTest ? "🧪 TEST PROTOCOL" : "AUTHENTICATED BY ANTHROPOS NETWORK" };
+        lastInFirstBatch.timestamp = new Date().toISOString();
 
         const discordRes = await fetch(`https://discord.com/api/v10/channels/${process.env.DISCORD_FORUM_CHANNEL_ID}/threads`, {
             method: "POST",
@@ -206,16 +237,33 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
                 name: `ORDER #${orderId} | ${isTest ? '[TEST] ' : ''}${rawInput.slice(0, 20).toUpperCase()}...`,
                 applied_tags: ["1466317856399425557"], // [Open Order] Tag
                 message: {
-                    embeds,
+                    embeds: firstBatch,
                     components
                 }
             }),
         });
 
+
         const responseData = await discordRes.json();
 
         if (discordRes.ok) {
             logger.info({ threadId: responseData.id }, '[Order Service] Mission briefing thread created');
+
+            // Send remaining batches as separate messages in the thread
+            for (let i = 1; i < batches.length; i++) {
+                try {
+                    await fetch(`https://discord.com/api/v10/channels/${responseData.id}/messages`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
+                        },
+                        body: JSON.stringify({ embeds: batches[i] })
+                    });
+                } catch (sendErr) {
+                    logger.error({ batchIndex: i, error: (sendErr as Error).message }, '[Order Service] Failed to send supplemental embed batch');
+                }
+            }
 
             await prisma.order.update({
                 where: { id: orderId },
@@ -225,6 +273,7 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
                     submissionExpiresAt: new Date(Date.now() + submissionTimeMs)
                 }
             });
+
 
             // --- QSTASH SCHEDULING ---
             if (process.env.QSTASH_TOKEN && process.env.APP_URL) {
@@ -316,12 +365,13 @@ export async function createOrderService(productId: number, rawInput: string, pe
     const crewWebhookUrl = `${process.env.APP_URL}/api/webhooks/crewai`;
     const crewApiUrl = "https://anthropos-order-8181b89e-a66c-4019-9ae3-472-bdb8118f.crewai.com/kickoff";
 
-    // --- BYPASS LOGIC FOR FAST TESTING ---
-    if (process.env.ENABLE_MOCK_CREWAI === 'true') {
-        logger.info({ orderId: newOrder.id }, '[Order Service] ⚡ BYPASS ENABLED: Skipping CrewAI and simulating result');
+    // --- BYPASS LOGIC FOR FAST TESTING OR MANUAL OVERRIDES ---
+    const manualDossier = process.env.MANUAL_DOSSIER;
+    if (process.env.ENABLE_MOCK_CREWAI === 'true' || manualDossier) {
+        logger.info({ orderId: newOrder.id }, '[Order Service] ⚡ BYPASS ENABLED: Using manual/mock dossier');
 
-        const mockKickoffId = `mock_${Date.now()}`;
-        const mockDossier = `
+        const mockKickoffId = `manual_${Date.now()}`;
+        const briefContent = manualDossier || `
 # ANTHROPOS NETWORK DOSSIER: MOCK EXECUTION
 ---
 ## SUBJECT: FAST_TEST_BYPASS
@@ -344,7 +394,7 @@ The core signal is verified. This simulation confirms that the Discord formattin
             where: { id: newOrder.id },
             data: {
                 kickoffId: mockKickoffId,
-                briefContent: mockDossier,
+                briefContent: briefContent,
                 status: "OPEN",
                 personaName: persona?.name,
                 personaDescription: persona?.description
@@ -354,13 +404,14 @@ The core signal is verified. This simulation confirms that the Discord formattin
         // Trigger Discord broadcast immediately
         await broadcastOrderToDiscord({
             orderId: updatedOrder.id,
-            briefContent: mockDossier,
+            briefContent: briefContent,
             productLink: updatedOrder.productLink || '',
             rawInput: updatedOrder.rawInput
         });
 
         return { success: true, order: updatedOrder, kickoffId: mockKickoffId };
     }
+
 
     let crewRes: Response | null = null;
     let lastError = '';
