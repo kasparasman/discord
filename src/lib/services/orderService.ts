@@ -234,7 +234,7 @@ export async function broadcastOrderToDiscord({ orderId, briefContent, productLi
                 "Authorization": `Bot ${process.env.DISCORD_TOKEN}`
             },
             body: JSON.stringify({
-                name: `ORDER #${orderId} | ${isTest ? '[TEST] ' : ''}${rawInput.slice(0, 20).toUpperCase()}...`,
+                name: `ORDER #${orderId}`,
                 applied_tags: ["1466317856399425557"], // [Open Order] Tag
                 message: {
                     embeds: firstBatch,
