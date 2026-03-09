@@ -350,14 +350,27 @@ export async function createOrderService(productId: number, rawInput: string, pe
     finalRawInput = rawInput;
 
     // Save order first to get ID for webhook
-    const newOrder = await prisma.order.create({
-        data: {
-            rawInput: finalRawInput,
-            productLink: finalProductLink,
-            status: "PENDING_CREWAI",
-            personaName: persona?.name,
-            personaDescription: persona?.description
-        }
+    // Used a transaction to ensure strict gapless, sequential IDs based on the max existing ID
+    const newOrder = await prisma.$transaction(async (tx) => {
+        // 1. Get the current maximum order ID
+        const maxOrder = await tx.order.findFirst({
+            orderBy: { id: 'desc' },
+            select: { id: true }
+        });
+        const currentMax = maxOrder?.id || 0;
+        const nextId = currentMax + 1;
+
+        // 2. Create the order using this specifically tracked sequence nextId
+        return await tx.order.create({
+            data: {
+                id: nextId,
+                rawInput: finalRawInput,
+                productLink: finalProductLink,
+                status: "PENDING_CREWAI",
+                personaName: persona?.name,
+                personaDescription: persona?.description
+            }
+        });
     });
 
     logger.info({ orderId: newOrder.id }, '[Order Service] Order created, kicking off CrewAI');
