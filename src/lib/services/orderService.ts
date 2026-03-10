@@ -433,9 +433,9 @@ The core signal is verified. This simulation confirms that the Discord formattin
     try {
         // NOTE: On Vercel, the max execution time is limited (10s Hobby, 60s+ Pro).
         // Since CrewAI "starting up" errors can take ~60s to return, multiple retries
-        // might exceed the function's duration. We'll attempt up to 3 total attempts
-        // with shorter wait times.
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        // might exceed the function's duration. We'll attempt up to 4 total attempts
+        // to handle cold boots and temporary 500s gracefully.
+        for (let attempt = 1; attempt <= 4; attempt++) {
             logger.info({ attempt, orderId: newOrder.id }, '[Order Service] Attempting CrewAI kickoff');
 
             crewRes = await fetch(crewApiUrl, {
@@ -464,27 +464,31 @@ The core signal is verified. This simulation confirms that the Discord formattin
             const errorText = await crewRes.text();
             lastError = errorText;
 
-            // Robust check for "starting up" error (handles both raw text and JSON wrapped in detail)
-            let isStartingUp = errorText.toLowerCase().includes("service is starting up");
+            // Robust check for "starting up" or internal crashes during boot
+            let isRetryable = errorText.toLowerCase().includes("service is starting up") ||
+                errorText.toLowerCase().includes("internal server error") ||
+                crewRes.status >= 500;
+
             try {
                 const errorJson = JSON.parse(errorText);
-                if (errorJson.detail?.toLowerCase().includes("service is starting up")) {
-                    isStartingUp = true;
+                if (errorJson.detail?.toLowerCase().includes("service is starting up") ||
+                    errorJson.detail?.toLowerCase().includes("internal server error")) {
+                    isRetryable = true;
                 }
             } catch (e) {
                 // Not JSON, that's fine
             }
 
-            if (isStartingUp && attempt < 3) {
-                // CrewAI says "try again in 30s", but we'll try sooner (5s) to avoid timing out Vercel too hard
-                // While still giving it a small window to finish booting.
-                const waitTime = 5000;
-                logger.info({ attempt, orderId: newOrder.id, waitTime }, '[Order Service] CrewAI is starting up. Retrying...');
+            if (isRetryable && attempt < 4) {
+                // CrewAI says "try again in 30s", but we'll try sooner to avoid timing out Vercel too hard
+                // Wait 10s if we hit an internal server error (likely crash during boot), else 5s.
+                const waitTime = crewRes.status >= 500 ? 10000 : 5000;
+                logger.info({ attempt, orderId: newOrder.id, waitTime, status: crewRes.status }, '[Order Service] CrewAI is starting up or temporarily unavailable. Retrying...');
                 await delay(waitTime);
                 continue;
             } else {
                 // Not a retryable error or max retries reached
-                logger.error({ attempt, errorText }, '[Order Service] CrewAI kickoff failed');
+                logger.error({ attempt, errorText, status: crewRes.status }, '[Order Service] CrewAI kickoff failed');
                 throw new Error(`CrewAI kickoff failed after ${attempt} attempts: ${errorText}`);
             }
         }
